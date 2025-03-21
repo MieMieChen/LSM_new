@@ -349,11 +349,11 @@ void KVStore::compaction() {
                     maxVtmp = sstableIndex[curLevel][j].getMaxV();
                 int IndexSize = sstableIndex[curLevel][j].getIndexSize();
                 waitlist.push_back(sstableIndex[curLevel][j]);
-                bool isX = isPathOfLevel(sstableIndex[curLevel][j].getFilename(),0);
-                if(isX)
-                {
-                    std::cout<< "here!" << std::endl;
-                }
+                // bool isX = isPathOfLevel(sstableIndex[curLevel][j].getFilename(),0);
+                // if(isX)
+                // {
+                //     std::cout<< "here!" << std::endl;
+                // }
                 // std::cout << sstableIndex[curLevel][j].getFilename()<<std::endl;
                 for(int k = 0;k<IndexSize;k++)
                { 
@@ -380,11 +380,11 @@ void KVStore::compaction() {
                     if(!(sstableIndex[curLevel+1][j].getMaxV()<minVtmp||sstableIndex[curLevel+1][j].getMinV()>maxVtmp))
                     {
                         waitlist.push_back(sstableIndex[curLevel+1][j]);
-                        bool isX = isPathOfLevel(sstableIndex[curLevel+1][j].getFilename(),0);
-                        if(isX)
-                        {
-                            std::cout<< "here!" << std::endl;
-                        }
+                        // bool isX = isPathOfLevel(sstableIndex[curLevel+1][j].getFilename(),0);
+                        // if(isX)
+                        // {
+                        //     std::cout<< "here!" << std::endl;
+                        // }
                         int IndexSize = sstableIndex[curLevel+1][j].getIndexSize();
                         for(int k = 0;k<IndexSize;k++)
                         {
@@ -482,6 +482,7 @@ void KVStore::compaction() {
             {
                 delsstable(it.getFilename());
             }
+            waitlist.clear();
         }
     }
 //从L1层往下 ，仅需要将超出的文件往下一层进行合并即可，无需合并该层的所有文件。
