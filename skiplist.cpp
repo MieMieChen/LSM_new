@@ -24,6 +24,8 @@ void skiplist::insert(uint64_t key, const std::string &str)
 {
     std::vector<slnode*> update(MAX_LEVEL);
 	slnode *cur = head;
+    if(cur==nullptr)
+        return;
 	for(int i = curMaxL-1; i >= 0; --i){
 		//一旦大了就下移一层
 		while(cur->nxt[i]->key < key){
@@ -55,7 +57,7 @@ std::string skiplist::search(uint64_t key)
     if(cur->key == key && cur->type == NORMAL){
         return cur->val;
     }
-    return " ";
+    return "";
 }
 bool skiplist::del(uint64_t key, uint32_t len)
 {
@@ -85,7 +87,7 @@ void skiplist::scan(uint64_t key1, uint64_t key2, std::vector<std::pair<uint64_t
 {
     slnode *Lnode = lowerBound(key1);
     slnode *Rnode = lowerBound(key2);
-    if(Lnode->key<=Rnode->key&& Rnode->key<= tail->nxt[0]->key)
+    if(Lnode->key<=Rnode->key&& Rnode->key<= tail->key)
     {
         slnode *cur = Lnode;
         while(cur!=Rnode){
@@ -94,6 +96,7 @@ void skiplist::scan(uint64_t key1, uint64_t key2, std::vector<std::pair<uint64_t
             }
             cur = cur->nxt[0];
         }
+        list.push_back(std::pair<uint64_t,std::string>(Rnode->key,Rnode->val));
     }
     return;
 
@@ -116,6 +119,14 @@ void skiplist::reset()
         delete cur;
         cur = tmp;
     }
+    delete head;
+    delete tail;    
+    head = new slnode(0, "", HEAD);
+    tail = new slnode(INF, "", TAIL);
+    for (int i = 0; i < MAX_LEVEL; ++i)
+        head->nxt[i] = tail;  
+    bytes = 0x0;
+    curMaxL = 1;
 }
 uint32_t skiplist::getBytes()
 {

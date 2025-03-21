@@ -11,8 +11,9 @@
 #include <set>
 #include <string>
 #include <utility>
-#include <math>
-
+#include <cmath>
+#include <unordered_set>
+#include <unordered_map>
 
 static const std::string DEL = "~DELETED~";
 const uint32_t MAXSIZE       = 2 * 1024 * 1024;
@@ -22,6 +23,8 @@ struct poi {
     int pos;       // 该sstable的第几个key-offset
     uint64_t time;
     Index index;
+    int sstableHeadI;
+    int sstableHeadJ;
 };
 
 struct cmpPoi {
@@ -31,6 +34,14 @@ struct cmpPoi {
         return a.index.key > b.index.key;
     }
 }; //这是一个比较器
+
+
+// 在 C++ 优先级队列中：
+// 返回 true 表示 a 的优先级低于 b
+// 返回 false 表示 a 的优先级高于或等于 b
+//  time 越大或者 key 越小的先出队
+
+
 
 KVStore::KVStore(const std::string &dir) :
     KVStoreAPI(dir) // read from sstables
@@ -84,7 +95,9 @@ void KVStore::put(uint64_t key, const std::string &val) {
     } else
         nxtsize = nxtsize - res.length() + val.length(); // change string
     if (nxtsize + 10240 + 32 <= MAXSIZE)
-        s->insert(key, val); // 小于等于（不超过） 2MB
+       {
+        s->insert(key, val);
+       }  // 小于等于（不超过） 2MB
     else {
         sstable ss(s);
         s->reset();
@@ -184,6 +197,7 @@ void KVStore::reset() {
         utils::rmdir(path.data());
         sstableIndex[level].clear();
     }
+    TIME = 0;
     totalLevel = -1;
 }
 
@@ -281,105 +295,198 @@ void KVStore::scan(uint64_t key1, uint64_t key2, std::list<std::pair<uint64_t, s
     }
 }
 
+bool isPathOfLevel(const std::string& path, int level) {
+    // 构造要查找的层级字符串
+    std::string levelStr = "/level-" + std::to_string(level) + "/";
+    
+    // 判断路径中是否包含该层级字符串
+    return path.find(levelStr) != std::string::npos;
+}
+
 
 void KVStore::compaction() {
     int curLevel = 0;
-    uint64_t minVtmp = INT64_MAX, maxVtmp = INT64_MIN;
+    uint64_t minVtmp = UINT64_MAX, maxVtmp = 0;
     std::list<std::pair<uint64_t, std::string>> complist;
     std::vector<sstablehead> waitlist;
     std::priority_queue<poi, std::vector<poi>, cmpPoi> pq;
     std::unordered_set<uint64_t> key;
     std::unordered_map<uint64_t, uint64_t> keyMaxTime;
-
+    int j = 0;
     int sizeCur = sstableIndex[curLevel].size();
     int sizeNxt = sstableIndex[curLevel+1].size();
-    if(sizeCur>pow(2,curLevel))
+    bool updateLevel = false;
+    sstable newTable;
+    std::string newPath;
+    for(curLevel;curLevel<=totalLevel;curLevel++)
     {
-        for(int j = 0;j<sizeCur;j++)
+        updateLevel = false;
+        sizeCur = sstableIndex[curLevel].size();
+        sizeNxt = sstableIndex[curLevel+1].size();
+        if(sizeNxt==0)
         {
-            if(minVtmp<sstableIndex[curLevel][j].getMinV())
-                minVtmp = sstableIndex[curLevel][j].getMinV();
-            if(maxVtmp>sstableIndex[curLevel][j].getMaxV())
-                maxVtmp = sstableIndex[curLevel][j].getMaxV();
-            waitlist.push_back(sstableIndex[curLevel][j]);
-            poi p;
-            p.sstableId = curLevel;
-            p.pos = j;
-            p.time = sstableIndex[curLevel][j].getTime();
-            p.index = sstableIndex[curLevel][j].index;
-            pq.push(p); 
+            updateLevel = true;
         }
-        //scan(minVtmp,maxVtmp,*complist);//把所有需要汇总的键值对给收集起来了
-        //L0层的都必须去归并
-        for(int j = 0;j<sizeNxt;j++)
+        if(sizeCur>pow(2,curLevel+1))
         {
-            if(!(sstableIndex[curLevel+1][j].getMaxV()<minVtmp||sstableIndex[curLevel+1][j].getMinV()>maxVtmp))
+            if(updateLevel)
             {
-                waitlist.push_back(sstableIndex[curLevel+1][j]);
-                poi p;
-                p.sstableId = curLevel+1;
-                p.pos = j;
-                p.time = sstableIndex[curLevel+1][j].getTime();
-                p.index = sstableIndex[curLevel+1][j].index;
-                pq.push(p);
+                totalLevel++;
             }
-        }
-        //将涉及到的文件读到内存，进行归并排序，并生成sstable写回下一层。
-        //如果后插入的time比已经pop出的要大,所以需要先记录所有key的最大time
-        for(auto &it : waitlist)
-        {
-            for(int i = 0;i<it.getCnt();i++)
+            if(curLevel==0)
             {
-                uint64_t key = it.getKey(i);
-                if(keyMaxTime.find(key)==keyMaxTime.end()||keyMaxTime[key]<it.getTime())
-                    keyMaxTime[key] = it.getTime();
+                j = 0;
             }
-        }
+            else
+            {
+                j = pow(2,curLevel+1);
+            }
+            for(;j<sizeCur;j++)
+            {
+                if(minVtmp>sstableIndex[curLevel][j].getMinV())
+                    minVtmp = sstableIndex[curLevel][j].getMinV();
+                if(maxVtmp<sstableIndex[curLevel][j].getMaxV())
+                    maxVtmp = sstableIndex[curLevel][j].getMaxV();
+                int IndexSize = sstableIndex[curLevel][j].getIndexSize();
+                waitlist.push_back(sstableIndex[curLevel][j]);
+                bool isX = isPathOfLevel(sstableIndex[curLevel][j].getFilename(),0);
+                if(isX)
+                {
+                    std::cout<< "here!" << std::endl;
+                }
+                // std::cout << sstableIndex[curLevel][j].getFilename()<<std::endl;
+                for(int k = 0;k<IndexSize;k++)
+               { 
+                    poi p;
+                    for(int q = 0;q<curLevel;q++)
+                    {
+                        p.sstableId +=sstableIndex[q].size();
+                    }
+                    p.sstableId += j;
+                    p.pos = k;
+                    p.time = sstableIndex[curLevel][j].getTime();
+                    p.index = sstableIndex[curLevel][j].getIndexById(p.pos);
+                    p.sstableHeadI = curLevel;
+                    p.sstableHeadJ = j;
+                    pq.push(p); 
+               }
+            }
+            //scan(minVtmp,maxVtmp,*complist);//把所有需要汇总的键值对给收集起来了
+            //L0层的都必须去归并
+            if(!updateLevel)
+            {
+                for(int j = 0;j<sizeNxt;j++)
+                {
+                    if(!(sstableIndex[curLevel+1][j].getMaxV()<minVtmp||sstableIndex[curLevel+1][j].getMinV()>maxVtmp))
+                    {
+                        waitlist.push_back(sstableIndex[curLevel+1][j]);
+                        bool isX = isPathOfLevel(sstableIndex[curLevel+1][j].getFilename(),0);
+                        if(isX)
+                        {
+                            std::cout<< "here!" << std::endl;
+                        }
+                        int IndexSize = sstableIndex[curLevel+1][j].getIndexSize();
+                        for(int k = 0;k<IndexSize;k++)
+                        {
+                            poi p;
+                            for(int q = 0;q<curLevel+1;q++)
+                            {
+                                p.sstableId +=sstableIndex[q].size();
+                            }
+                            p.sstableId += j;
+                            p.sstableHeadI = curLevel;
+                            p.sstableHeadJ = j;
+                            p.pos = k;
+                            p.time = sstableIndex[curLevel+1][j].getTime();
+                            p.index = sstableIndex[curLevel+1][j].getIndexById(p.pos);
+                            pq.push(p);
+                        }
+                    }
+                }
+            }
+            //将涉及到的文件读到内存，进行归并排序，并生成sstable写回下一层。
+            //如果后插入的time比已经pop出的要大,所以需要先记录所有key的最大time
+            for(auto &it : waitlist)
+            {
+                for(int i = 0;i<it.getCnt();i++)
+                {
+                    uint64_t key = it.getKey(i);
+                    if(keyMaxTime.find(key)==keyMaxTime.end()||keyMaxTime[key]<it.getTime())
+                        keyMaxTime[key] = it.getTime();
+                }
+            }
+    //只是把每个sstable的第一个key给放进去了，后面的要慢慢塞进去，现在需要创造新的sstable
+            newPath = "./data/level-" + std::to_string(curLevel + 1) + "/";
+            if (!utils::dirExists(newPath)) {
+                utils::mkdir(newPath.data());
+            }
+            // 生成文件名（通常基于时间戳）
 
-        while(!pq.empty())
-        {
-            
-            poi p = pq.top();
-            pq.pop();
-            if(key.find(p.index.key)==key.end()&&p.getTime() == keyMaxTime[p.index.key])
+            while(!pq.empty())
             {
-                key.insert(p.index.key);
-                sstable ss;
-                ss.loadFile(sstableIndex[p.sstableId][p.pos].getFilename().data());
+                
+                poi p = pq.top();
+                pq.pop();
+                if(key.find(p.index.key)==key.end()&&p.time == keyMaxTime[p.index.key])
+                {
+                    key.insert(p.index.key);
+                    sstable ss;
+                    ss.loadFile(sstableIndex[p.sstableHeadI][p.sstableHeadJ].getFilename().data());
+                    uint32_t len;
+                    int offset = ss.searchOffset(p.index.key, len);
+                    if(offset != -1) {
+                        // 使用 fetchString 读取数据
+                        std::string value = fetchString(
+                            sstableIndex[p.sstableHeadI][p.sstableHeadJ].getFilename(),
+                            offset,
+                            len
+                        );
+                        // 将key-value对插入新的SSTable
+                        if(!newTable.checkSize(value,curLevel,0))
+                        {
+                            newTable.insert(p.index.key, value);
+                        }
+                        else
+                        {
+                            std::string filename = newPath + std::to_string(++TIME) + ".sst";
+                            newTable.setFilename(filename);  // 设置文件名
+                            newTable.putFile(newTable.getFilename().data());
+                            addsstable(newTable,curLevel+1);
+                            newTable.reset();
+                            //newTable.setFilename(newPath + std::to_string(++TIME) + ".sst");
+                            newTable.insert(p.index.key, value);
+                        }
+                    }
+                }
+                if(p.pos + 1 < sstableIndex[p.sstableHeadI][p.sstableHeadJ].getIndexSize()) {
+                    poi next;
+                    next.sstableId = p.sstableId;
+                    next.pos = p.pos + 1;
+                    next.time = p.time;
+                    next.index = sstableIndex[p.sstableHeadI][p.sstableHeadJ].getIndexById(next.pos);
+                    next.sstableHeadI = p.sstableHeadI;
+                    next.sstableHeadJ = p.sstableHeadJ;
+                    pq.push(next);
+                }
             }
-            
+            //删除已经被合并的文件
+            // 处理当前层// 处理最后一个SSTable
+            if(newTable.getCnt() > 0) {
+                std::string filename = newPath + std::to_string(++TIME) + ".sst";
+                newTable.setFilename(filename);  // 设置文件名
+                newTable.putFile(newTable.getFilename().data());
+                addsstable(newTable,curLevel+1);
+            }
+
+            for(auto &it : waitlist)
+            {
+                delsstable(it.getFilename());
+            }
         }
     }
-
 //从L1层往下 ，仅需要将超出的文件往下一层进行合并即可，无需合并该层的所有文件。
 //在合并的时候如果遇到相同键K的多条记录，通过比较时间戳来决定K的最新值，时间戳大的被保留。
 //完成一次合并操作需要更新涉及到的SSTable在内存中的缓存信息。也就是sstableindex
-    for(curLevel;curLevel<totalLevel-1;curLevel++)
-    {
-        int sizeCur = sstableIndex[curLevel].size();
-        int sizeNxt = sstableIndex[curLevel+1].size();
-        if(sizeCur>pow(2,curLevel))
-        {
-            //本层只用找多出来的
-            for(int j = pow(2,curLevel)-1;j<sizeCur;j++)
-            {
-                if(minVtmp<sstableIndex[curLevel][j].getMinV())
-                    minVtmp = sstableIndex[curLevel][j].getMinV();
-                if(maxVtmp>sstableIndex[curLevel][j].getMaxV())
-                    maxVtmp = sstableIndex[curLevel][j].getMaxV();
-            }
-            scan(minVtmp,maxVtmp,*complist);//把所有需要汇总的键值对给收集起来了
-            for(int j = 0;j<sizeNxt;j++)
-            {
-                if(!(sstableIndex[curLevel+1][j].getMaxV()<minVtmp||sstableIndex[curLevel+1][j].getMinV()>maxVtmp))
-                {
-                    waitlist.push_back(sstableIndex[curLevel+1][j]);
-                }
-            }
-
-
-        }
-    }
     // TODO here
 }
 
@@ -399,6 +506,7 @@ void KVStore::delsstable(std::string filename) {
     int flag = utils::rmfile(filename.data());
     if (flag != 0) {
         std::cout << "delete fail!" << std::endl;
+        std::cout << "filename" <<filename<<std::endl;
         std::cout << strerror(errno) << std::endl;
     }
 }

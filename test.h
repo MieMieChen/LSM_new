@@ -24,6 +24,10 @@ protected:
             ++nr_passed_tests;
             return;
         }
+        else
+        {
+            std::cout << " fail !"<<std::endl;
+        }
         if (verbose) {
             std::cerr << "TEST Error @" << file << ":" << line;
             std::cerr << ", expected " << exp;

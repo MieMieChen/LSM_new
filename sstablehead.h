@@ -51,6 +51,10 @@ public:
         bytes  = 10240 + 32;
     }
 
+    int getIndexSize()
+    {
+        return index.size();
+    }
     void loadFileHead(const char *path);
     void reset();
 
