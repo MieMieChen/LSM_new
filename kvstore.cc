@@ -538,7 +538,7 @@ std::string KVStore::fetchString(std::string file, int startOffset, uint32_t len
         std::cerr << "Failed to open file: " << file << std::endl;
         return "";
     }   
-    
+    fseek(fp, startOffset, SEEK_SET);
     size_t bytesRead = fread(strBuf, 1, len, fp);
     if (bytesRead != len) {
         // 处理错误：未能读取所有请求的字节
