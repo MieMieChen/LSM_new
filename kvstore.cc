@@ -149,11 +149,6 @@ std::string KVStore::get(uint64_t key) //
                 time       = it.getTime();
                 goalUrl    = it.getFilename();
                 goalOffset = offset + 32 + 10240 + 12 * it.getCnt();
-// SSTable文件：
-// [文件头]      // 32字节
-// [布隆过滤器]  // 10240字节
-// [索引区]      // 12字节 * 键值对数量
-// [数据区]      // 实际数据
                 goalLen    = len;
             }
         }
@@ -341,6 +336,7 @@ void KVStore::compaction() {
             {
                 j = pow(2,curLevel+1);
             }
+            minVtmp = UINT64_MAX, maxVtmp = 0;
             for(;j<sizeCur;j++)
             {
                 if(minVtmp>sstableIndex[curLevel][j].getMinV())
@@ -421,7 +417,7 @@ void KVStore::compaction() {
                 utils::mkdir(newPath.data());
             }
             // 生成文件名（通常基于时间戳）
-
+            key.clear();
             while(!pq.empty())
             {
                 
@@ -434,11 +430,12 @@ void KVStore::compaction() {
                     ss.loadFile(sstableIndex[p.sstableHeadI][p.sstableHeadJ].getFilename().data());
                     uint32_t len;
                     int offset = ss.searchOffset(p.index.key, len);
+                    int totalOffset = offset + 32 + 10240 + 12 * ss.getCnt();
                     if(offset != -1) {
                         // 使用 fetchString 读取数据
                         std::string value = fetchString(
-                            sstableIndex[p.sstableHeadI][p.sstableHeadJ].getFilename(),
-                            offset,
+                            ss.getFilename(),
+                            totalOffset,
                             len
                         );
                         // 将key-value对插入新的SSTable
@@ -450,6 +447,7 @@ void KVStore::compaction() {
                         {
                             std::string filename = newPath + std::to_string(++TIME) + ".sst";
                             newTable.setFilename(filename);  // 设置文件名
+                            newTable.setTime(TIME);
                             newTable.putFile(newTable.getFilename().data());
                             addsstable(newTable,curLevel+1);
                             newTable.reset();
@@ -467,15 +465,18 @@ void KVStore::compaction() {
                     next.sstableHeadI = p.sstableHeadI;
                     next.sstableHeadJ = p.sstableHeadJ;
                     pq.push(next);
+                    
                 }
             }
             //删除已经被合并的文件
             // 处理当前层// 处理最后一个SSTable
             if(newTable.getCnt() > 0) {
                 std::string filename = newPath + std::to_string(++TIME) + ".sst";
+                newTable.setTime(TIME);
                 newTable.setFilename(filename);  // 设置文件名
                 newTable.putFile(newTable.getFilename().data());
                 addsstable(newTable,curLevel+1);
+                newTable.reset();
             }
 
             for(auto &it : waitlist)
@@ -531,13 +532,24 @@ char strBuf[2097152];
  */
 std::string KVStore::fetchString(std::string file, int startOffset, uint32_t len) {
     // TODO here
+    memset(strBuf, 0, sizeof(strBuf));
     FILE *fp = fopen(file.c_str(), "rb");
     if (fp == NULL) {
         std::cerr << "Failed to open file: " << file << std::endl;
         return "";
     }   
-    fseek(fp, startOffset, SEEK_SET);
-    fread(strBuf, 1, len, fp);
+    
+    size_t bytesRead = fread(strBuf, 1, len, fp);
+    if (bytesRead != len) {
+        // 处理错误：未能读取所有请求的字节
+        if (feof(fp)) {
+            // 文件尾
+            std::cerr << "Reached end of file unexpectedly" << std::endl;
+        } else if (ferror(fp)) {
+            // 读取错误
+            std::cerr << "Error reading file: " << strerror(errno) << std::endl;
+        }
+}
     fclose(fp);
     return std::string(strBuf, len);
 }

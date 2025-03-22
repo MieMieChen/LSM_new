@@ -26,7 +26,7 @@ protected:
         }
         else
         {
-            std::cout << " fail !"<<std::endl;
+            std::cout << "fail" <<std::endl;
         }
         if (verbose) {
             std::cerr << "TEST Error @" << file << ":" << line;

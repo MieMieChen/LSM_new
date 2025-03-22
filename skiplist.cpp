@@ -92,11 +92,13 @@ void skiplist::scan(uint64_t key1, uint64_t key2, std::vector<std::pair<uint64_t
         slnode *cur = Lnode;
         while(cur!=Rnode){
             if(cur->type == NORMAL){
-                list.push_back(std::pair<uint64_t, std::string>(cur->key, cur->val));
+                //if(cur->key<=key2&&cur->key>=key1)
+                    list.push_back(std::pair<uint64_t, std::string>(cur->key, cur->val));
             }
             cur = cur->nxt[0];
         }
-        list.push_back(std::pair<uint64_t,std::string>(Rnode->key,Rnode->val));
+        if(key2==Rnode->key)
+            list.push_back(std::pair<uint64_t,std::string>(Rnode->key,Rnode->val));
     }
     return;
 
