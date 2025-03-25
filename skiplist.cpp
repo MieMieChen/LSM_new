@@ -34,6 +34,7 @@ void skiplist::insert(uint64_t key, const std::string &str)
 		update[i] = cur;
 	}
     if (cur->nxt[0]->key == key && cur->nxt[0]->type == NORMAL) {
+        bytes = bytes - cur->nxt[0]->val.length() + str.length();  //要更新一下bytes 
         cur->nxt[0]->val = str;
         return;
     }

@@ -79,6 +79,8 @@ KVStore::~KVStore()
         utils::_mkdir(path.data());
         totalLevel = 0;
     }
+    std::string filename = ss.getFilename();
+    std::cout << "Writing to file: " << filename << std::endl;
     ss.putFile(ss.getFilename().data());
     compaction(); // 从0层开始尝试合并  c:需要实现
 }
@@ -120,6 +122,10 @@ void KVStore::put(uint64_t key, const std::string &val) {
  */
 std::string KVStore::get(uint64_t key) //
 {
+    // if(key==2030)
+    // {
+    //     std::cout << "get bugs"<<std::endl;
+    // }
     uint64_t time = 0;
     int goalOffset;
     uint32_t goalLen;
@@ -298,12 +304,24 @@ bool isPathOfLevel(const std::string& path, int level) {
     return path.find(levelStr) != std::string::npos;
 }
 
+struct waitStruct
+{
+    sstablehead tmp;
+    int sstableHeadI,sstableHeadJ;
+    waitStruct(sstablehead tmp,int i,int j)
+    {
+        this->tmp = tmp;
+        this->sstableHeadI = i;
+        this->sstableHeadJ = j;
+    }
+};
+
 
 void KVStore::compaction() {
     int curLevel = 0;
     uint64_t minVtmp = UINT64_MAX, maxVtmp = 0;
     std::list<std::pair<uint64_t, std::string>> complist;
-    std::vector<sstablehead> waitlist;
+    std::vector<waitStruct> waitlist;
     std::priority_queue<poi, std::vector<poi>, cmpPoi> pq;
     std::unordered_set<uint64_t> key;
     std::unordered_map<uint64_t, uint64_t> keyMaxTime;
@@ -315,15 +333,19 @@ void KVStore::compaction() {
     std::string newPath;
     for(curLevel;curLevel<=totalLevel;curLevel++)
     {
+        // if(curLevel==6||curLevel==7)
+        // {
+        //      std::cout << "11";
+        // }
         updateLevel = false;
         sizeCur = sstableIndex[curLevel].size();
         sizeNxt = sstableIndex[curLevel+1].size();
-        if(sizeNxt==0)
-        {
-            updateLevel = true;
-        }
         if(sizeCur>pow(2,curLevel+1))
         {
+            if(sizeNxt==0)
+            {
+                updateLevel = true;
+            }
             if(updateLevel)
             {
                 totalLevel++;
@@ -344,28 +366,42 @@ void KVStore::compaction() {
                 if(maxVtmp<sstableIndex[curLevel][j].getMaxV())
                     maxVtmp = sstableIndex[curLevel][j].getMaxV();
                 int IndexSize = sstableIndex[curLevel][j].getIndexSize();
-                waitlist.push_back(sstableIndex[curLevel][j]);
+                waitlist.push_back(waitStruct(sstableIndex[curLevel][j],curLevel,j));
                 // bool isX = isPathOfLevel(sstableIndex[curLevel][j].getFilename(),0);
                 // if(isX)
                 // {
                 //     std::cout<< "here!" << std::endl;
                 // }
                 // std::cout << sstableIndex[curLevel][j].getFilename()<<std::endl;
-                for(int k = 0;k<IndexSize;k++)
-               { 
-                    poi p;
-                    for(int q = 0;q<curLevel;q++)
-                    {
-                        p.sstableId +=sstableIndex[q].size();
-                    }
-                    p.sstableId += j;
-                    p.pos = k;
-                    p.time = sstableIndex[curLevel][j].getTime();
-                    p.index = sstableIndex[curLevel][j].getIndexById(p.pos);
-                    p.sstableHeadI = curLevel;
-                    p.sstableHeadJ = j;
-                    pq.push(p); 
-               }
+            //     for(int k = 0;k<IndexSize;k++)
+            //    { 
+            //         // uint64_t key = sstableIndex[curLevel][j].getKey(k);
+            //         // uint64_t time = sstableIndex[curLevel][j].getTime();
+            //         // uint32_t len;
+            //         // int offset = sstableIndex[curLevel][j].getOffset(k - 1);
+            //         // if (offset != -1) {
+            //         //     std::string value = fetchString(
+            //         //         sstableIndex[curLevel][j].getFilename(),
+            //         //         offset + 32 + 10240 + 12 * sstableIndex[curLevel][j].getCnt(),
+            //         //         len
+            //         //     );
+            //         //     if (value == DEL && curLevel + 1 >= totalLevel) {
+            //         //         continue;
+            //         //     }
+            //         // }
+            //         poi p;
+            //         for(int q = 0;q<curLevel;q++)
+            //         {
+            //             p.sstableId +=sstableIndex[q].size();
+            //         }
+            //         p.sstableId += j;
+            //         p.pos = k;
+            //         p.time = sstableIndex[curLevel][j].getTime();
+            //         p.index = sstableIndex[curLevel][j].getIndexById(p.pos);
+            //         p.sstableHeadI = curLevel;
+            //         p.sstableHeadJ = j;
+            //         pq.push(p); 
+            //    }
             }
             //scan(minVtmp,maxVtmp,*complist);//把所有需要汇总的键值对给收集起来了
             //L0层的都必须去归并
@@ -375,28 +411,43 @@ void KVStore::compaction() {
                 {
                     if(!(sstableIndex[curLevel+1][j].getMaxV()<minVtmp||sstableIndex[curLevel+1][j].getMinV()>maxVtmp))
                     {
-                        waitlist.push_back(sstableIndex[curLevel+1][j]);
+                        waitlist.push_back(waitStruct(sstableIndex[curLevel+1][j],curLevel+1,j));
                         // bool isX = isPathOfLevel(sstableIndex[curLevel+1][j].getFilename(),0);
                         // if(isX)
                         // {
                         //     std::cout<< "here!" << std::endl;
                         // }
-                        int IndexSize = sstableIndex[curLevel+1][j].getIndexSize();
-                        for(int k = 0;k<IndexSize;k++)
-                        {
-                            poi p;
-                            for(int q = 0;q<curLevel+1;q++)
-                            {
-                                p.sstableId +=sstableIndex[q].size();
-                            }
-                            p.sstableId += j;
-                            p.sstableHeadI = curLevel;
-                            p.sstableHeadJ = j;
-                            p.pos = k;
-                            p.time = sstableIndex[curLevel+1][j].getTime();
-                            p.index = sstableIndex[curLevel+1][j].getIndexById(p.pos);
-                            pq.push(p);
-                        }
+                        // int IndexSize = sstableIndex[curLevel+1][j].getIndexSize();
+                        // for(int k = 0;k<IndexSize;k++)
+                        // {
+                        //     // uint64_t key = sstableIndex[curLevel+1][j].getKey(k);
+                        //     // uint64_t time = sstableIndex[curLevel+1][j].getTime();
+                        //     // uint32_t len;
+                        //     // int offset = sstableIndex[curLevel+1][j].getOffset(k - 1);
+                        //     // if (offset != -1) {
+                        //     //     std::string value = fetchString(
+                        //     //         sstableIndex[curLevel+1][j].getFilename(),
+                        //     //         offset + 32 + 10240 + 12 * sstableIndex[curLevel+1][j].getCnt(),
+                        //     //         len
+                        //     //     );
+                        //     //     if (value == DEL && curLevel + 1 >= totalLevel) {
+                        //     //         continue;
+                        //     //     }
+                        //     // }
+
+                        //     poi p;
+                        //     for(int q = 0;q<curLevel+1;q++)
+                        //     {
+                        //         p.sstableId +=sstableIndex[q].size();
+                        //     }
+                        //     p.sstableId += j;
+                        //     p.sstableHeadI = curLevel+1;
+                        //     p.sstableHeadJ = j;
+                        //     p.pos = k;
+                        //     p.time = sstableIndex[curLevel+1][j].getTime();
+                        //     p.index = sstableIndex[curLevel+1][j].getIndexById(p.pos);
+                        //     pq.push(p);
+                        // }
                     }
                 }
             }
@@ -404,11 +455,20 @@ void KVStore::compaction() {
             //如果后插入的time比已经pop出的要大,所以需要先记录所有key的最大time
             for(auto &it : waitlist)
             {
-                for(int i = 0;i<it.getCnt();i++)
+                for(int i = 0;i<it.tmp.getCnt();i++)
                 {
-                    uint64_t key = it.getKey(i);
-                    if(keyMaxTime.find(key)==keyMaxTime.end()||keyMaxTime[key]<it.getTime())
-                        keyMaxTime[key] = it.getTime();
+                    uint64_t key = it.tmp.getKey(i);
+                    if(keyMaxTime.find(key)==keyMaxTime.end()||keyMaxTime[key]<it.tmp.getTime())
+                        keyMaxTime[key] = it.tmp.getTime();
+                }
+                if (it.tmp.getCnt() > 0) {  // 确保SSTable非空
+                    poi p;
+                    p.sstableHeadI = it.sstableHeadI;
+                    p.sstableHeadJ = it.sstableHeadJ;
+                    p.pos = 0;
+                    p.index = it.tmp.getIndexById(0);  // 获取第一个键值对
+                    p.time = it.tmp.getTime();
+                    pq.push(p);
                 }
             }
     //只是把每个sstable的第一个key给放进去了，后面的要慢慢塞进去，现在需要创造新的sstable
@@ -425,6 +485,7 @@ void KVStore::compaction() {
                 pq.pop();
                 if(key.find(p.index.key)==key.end()&&p.time == keyMaxTime[p.index.key])
                 {
+                    
                     key.insert(p.index.key);
                     sstable ss;
                     ss.loadFile(sstableIndex[p.sstableHeadI][p.sstableHeadJ].getFilename().data());
@@ -465,7 +526,6 @@ void KVStore::compaction() {
                     next.sstableHeadI = p.sstableHeadI;
                     next.sstableHeadJ = p.sstableHeadJ;
                     pq.push(next);
-                    
                 }
             }
             //删除已经被合并的文件
@@ -481,7 +541,7 @@ void KVStore::compaction() {
 
             for(auto &it : waitlist)
             {
-                delsstable(it.getFilename());
+                delsstable(it.tmp.getFilename());
             }
             waitlist.clear();
         }

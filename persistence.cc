@@ -62,8 +62,11 @@ private:
          * Write 10MB data to drain previous data out of memory.
          */
         for (i = 0; i <= 10240; ++i)
-            store.put(max + i, std::string(1024, 'x'));
-
+            {
+                if(i==10240)
+                    std::cout << "hh";
+                store.put(max + i, std::string(1024, 'x'));
+            }
         std::cout << "Data is ready, please press ctrl-c/ctrl-d to"
                      " terminate this program!"
                   << std::endl;
@@ -89,6 +92,7 @@ private:
                 store.put(max + i, std::string(512, 'x'));
             }
         }
+        
     }
 
     void test(uint64_t max) {
