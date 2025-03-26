@@ -90,6 +90,7 @@ KVStore::~KVStore()
  * No return values for simplicity.
  */
 void KVStore::put(uint64_t key, const std::string &val) {
+
     uint32_t nxtsize = s->getBytes();
     std::string res  = s->search(key);
     if (!res.length()) { // new add
@@ -309,198 +310,391 @@ bool isPathOfLevel(const std::string& path, int level) {
     return path.find(levelStr) != std::string::npos;
 }
 
-struct waitStruct
-{
-    sstablehead tmp;
-    int sstableHeadI,sstableHeadJ;
-    waitStruct(sstablehead tmp,int i,int j)
-    {
-        this->tmp = tmp;
-        this->sstableHeadI = i;
-        this->sstableHeadJ = j;
-    }
-};
+// struct waitStruct
+// {
+//     sstablehead tmp;
+//     int sstableHeadI,sstableHeadJ;
+//     waitStruct(sstablehead tmp,int i,int j)
+//     {
+//         this->tmp = tmp;
+//         this->sstableHeadI = i;
+//         this->sstableHeadJ = j;
+//     }
+// };
 
-struct SSTableWithPos {
-    sstablehead table;  // SSTable数据
-    int i;          // 在sstableIndex中的层级i
-    int j;          // 在sstableIndex[level]中的位置j
-};
+// struct SSTableWithPos {
+//     sstablehead table;  // SSTable数据
+//     int i;          // 在sstableIndex中的层级i
+//     int j;          // 在sstableIndex[level]中的位置j
+// };
+
+
+
+std::vector<std::pair<uint64_t, std::string>>  mergeSort(std::vector<std::pair<uint64_t, std::string>> pre, std::vector<std::pair<uint64_t, std::string>> new)
+{
+
+}
 
 void KVStore::compaction() {
     int curLevel = 0;
     uint64_t minVtmp = UINT64_MAX, maxVtmp = 0;
-    std::list<std::pair<uint64_t, std::string>> complist;
-    std::vector<waitStruct> waitlist;
+    std::vector<sstablehead> waitlist;
     std::priority_queue<poi, std::vector<poi>, cmpPoi> pq;
-    std::unordered_set<uint64_t> key;
-    std::unordered_map<uint64_t, uint64_t> keyMaxTime;
+    std::unordered_set<uint64_t> processedKeys;
+   //  std::unordered_map<uint64_t, uint64_t> keyMaxTime;
     int j = 0;
-    int sizeCur = sstableIndex[curLevel].size();
-    int sizeNxt = sstableIndex[curLevel+1].size();
+    int sizeCur, sizeNxt;
     bool updateLevel = false;
     sstable newTable;
     std::string newPath;
-    for(curLevel;curLevel<=totalLevel;curLevel++)
-    {
-
+    
+    for(; curLevel <= totalLevel; curLevel++) {
         updateLevel = false;
         sizeCur = sstableIndex[curLevel].size();
-        sizeNxt = sstableIndex[curLevel+1].size();
-        if(sizeCur>pow(2,curLevel+1))
-        {
-            if(sizeNxt==0)
-            {
+        sizeNxt = (curLevel + 1 <= totalLevel) ? sstableIndex[curLevel+1].size() : 0;
+        
+        if(sizeCur > pow(2, curLevel+1)) {
+            // Prepare for next level
+            if(sizeNxt == 0) {
                 updateLevel = true;
-            }
-            if(updateLevel)
-            {
                 totalLevel++;
-            }
-            if(curLevel==0)
-            {
+            }            
+            waitlist.clear();
+            processedKeys.clear();
+            keyMaxTime.clear();
+            minVtmp = UINT64_MAX;
+            maxVtmp = 0;
+        
+
+            if(curLevel == 0) {
+                //Level 0: take all SSTables
                 j = 0;
-                minVtmp = UINT64_MAX, maxVtmp = 0;
-                for(;j<sizeCur;j++)
-                {
-                    if(minVtmp>sstableIndex[curLevel][j].getMinV())
-                        minVtmp = sstableIndex[curLevel][j].getMinV();
-                    if(maxVtmp<sstableIndex[curLevel][j].getMaxV())
-                        maxVtmp = sstableIndex[curLevel][j].getMaxV();
-                    int IndexSize = sstableIndex[curLevel][j].getIndexSize();
-                    waitlist.push_back(waitStruct(sstableIndex[curLevel][j],curLevel,j));
-                }
+                for(; j < sizeCur; j++) {
+                if(minVtmp > sstableIndex[curLevel][j].getMinV())
+                    minVtmp = sstableIndex[curLevel][j].getMinV();
+                if(maxVtmp < sstableIndex[curLevel][j].getMaxV())
+                    maxVtmp = sstableIndex[curLevel][j].getMaxV();
+                waitlist.push_back(sstableIndex[curLevel][j]);
             }
-            else
-            {
-                std::vector<SSTableWithPos> candidates;
-                for (int j = 0; j < sstableIndex[curLevel].size(); j++) {
+            } else {
+                std::vector<sstablehead> candidates;
+                for (int j = 0; j < sizeCur; j++) {
                     candidates.push_back({
-                        sstableIndex[curLevel][j],  // sstablehead
-                        curLevel,                   // i坐标
-                        j                           // j坐标
+                        sstableIndex[curLevel][j],
                     });
                 }
-                // 按时间戳和最小键排序
+                
+                // Sort by timestamp and key
                 std::sort(candidates.begin(), candidates.end(), [](const auto& a, const auto& b) {
                     if (a.table.getTime() != b.table.getTime()) {
-                        return a.table.getTime() < b.table.getTime();  // 时间戳小的优先
+                        return a.table.getTime() < b.table.getTime();
                     }
-                    return a.table.getMinV() < b.table.getMinV();      // 时间戳相同则按键排序
+                    return a.table.getMinV() < b.table.getMinV();
                 });
-
-                for(j = 0;j<sizeCur-pow(2,curLevel+1);j++)
-                {
-                    if(minVtmp>candidates[j].table.getMinV())
-                        minVtmp = candidates[j].table.getMinV();
-                    if(maxVtmp<candidates[j].table.getMaxV())
-                        maxVtmp = candidates[j].table.getMaxV();
-                    int IndexSize = candidates[j].table.getIndexSize();
-                    waitlist.push_back(waitStruct(candidates[j].table,candidates[j].i,candidates[j].j));
+                
+                int tablesToSelect = sizeCur - pow(2, curLevel+1);
+                for(j = 0; j < tablesToSelect && j < candidates.size(); j++) {
+                    if(minVtmp > candidates[j].getMinV())
+                        minVtmp = candidates[j].getMinV();
+                    if(maxVtmp < candidates[j].getMaxV())
+                        maxVtmp = candidates[j].getMaxV();
+                    waitlist.push_back(candidates[j]);
                 }
             }
-           
-            //scan(minVtmp,maxVtmp,*complist);//把所有需要汇总的键值对给收集起来了
-            //L0层的都必须去归并
-            if(!updateLevel)
-            {
-                for(int j = 0;j<sizeNxt;j++)
-                {
-                    if(!(sstableIndex[curLevel+1][j].getMaxV()<minVtmp||sstableIndex[curLevel+1][j].getMinV()>maxVtmp))
-                    {
-                        waitlist.push_back(waitStruct(sstableIndex[curLevel+1][j],curLevel+1,j));
+            
+            // Add overlapping SSTables from next level
+            if(!updateLevel && (curLevel + 1 <= totalLevel)) {
+                for(int j = 0; j < sizeNxt; j++) {
+                    if(!(sstableIndex[curLevel+1][j].getMaxV() < minVtmp || 
+                         sstableIndex[curLevel+1][j].getMinV() > maxVtmp)) {
+                        waitlist.push_back(sstableIndex[curLevel+1][j]);
                     }
                 }
             }
-            //将涉及到的文件读到内存，进行归并排序，并生成sstable写回下一层。
-            //如果后插入的time比已经pop出的要大,所以需要先记录所有key的最大time
-            for(auto &it : waitlist)
+            
+            // Find the maximum timestamp for each key
+            int sizeWait = waitlist.size();
+            sstable sstables[sizeWait];
+            sstablehead sstableheads[sizeWait];
+            std::vector<std::pair<uint64_t, std::string>>  kvs;
+            std::vector<std::pair<uint64_t, std::string>>  mergedKVs;
+            for(int i = 0;i<sizeWait;i++) {
+                sstables[i].loadFile(waitlist[i].getFilename().data());
+                sstableheads[i] = sstables[i].getHead();
+                kvs.clear();
+                for(int j = 0;j<sstableheads[i].getCnt();j++) {
+                    kvs.push_back(std::make_pair(sstableheads[i].getKey(j), sstables[i].getData(j)));
+                }
+                mergedKVs = mergeSort(mergedKVs,kvs);
+                // for(int i = 0; i < waitlist[i].getCnt(); i++) {
+                //     uint64_t key = waitlist[i].getKey(i);
+                //     if(keyMaxTime.find(key) == keyMaxTime.end() || keyMaxTime[key] < waitlist[i].getTime())
+                //         keyMaxTime[key] = waitlist[i].getTime();
+                // }
+            }
+             //mergedKVs 现在是一个完全全新的要被加入到sstable的数据，然后顺序就是越早出队的越优先
+            
+             newPath = "./data/level-" + std::to_string(curLevel + 1) + "/";
+             if (!utils::dirExists(newPath)) {
+                 utils::mkdir(newPath.data());
+             }
+             
+            for(int i = 0;i<mergedKVs.size();i++)
             {
-                for(int i = 0;i<it.tmp.getCnt();i++)
-                {
-                    uint64_t key = it.tmp.getKey(i);
-                    if(keyMaxTime.find(key)==keyMaxTime.end()||keyMaxTime[key]<it.tmp.getTime())
-                        keyMaxTime[key] = it.tmp.getTime();
+                std::string value = mergedKVs[i].second;
+                uint64_t 
+                uint32_t nxtBytes = newTable.getHead().getBytes() + 12 + value.length() ;
+                if(nxtBytes <= MAXSIZE) {
+                    newTable.insert(p.index.key, value);
+                } else {
+                    // Flush current SSTable and create a new one
+                    std::string filename = newPath + std::to_string(++TIME) + ".sst";
+                    newTable.setFilename(filename);
+                    newTable.setTime(TIME);
+                    newTable.putFile(newTable.getFilename().data());
+                    addsstable(newTable, curLevel+1);
+                    newTable.reset();
+                    newTable.insert(p.index.key, value);
+                }
+            }
+            
+            for(auto &it : waitlist) {
+                for(int i = 0; i < it.tmp.getCnt(); i++) {
                     poi p;
-                    p.pos = 0;
-                    p.index = it.tmp.getIndexById(i);  // 获取第一个键值对
+                    p.pos = i;  // Store the position in the SSTable
+                    p.index = it.tmp.getIndexById(i);
                     p.time = it.tmp.getTime();
                     p.sstableHeadI = it.sstableHeadI;
                     p.sstableHeadJ = it.sstableHeadJ;
                     pq.push(p);
                 }
             }
-    //只是把每个sstable的第一个key给放进去了，后面的要慢慢塞进去，现在需要创造新的sstable
-            newPath = "./data/level-" + std::to_string(curLevel + 1) + "/";
-            if (!utils::dirExists(newPath)) {
-                utils::mkdir(newPath.data());
-            }
-            // 生成文件名（通常基于时间戳）
-            key.clear();
-            while(!pq.empty())
-            {
+            
+            // Create new directory for next level if needed
+            
+            // Create new SSTable(s) with merged data
+            processedKeys.clear();
+            while(!pq.empty()) {
                 poi p = pq.top();
                 pq.pop();
-                if(key.find(p.index.key)==key.end()&&p.time == keyMaxTime[p.index.key])
-                {
-                    key.insert(p.index.key);
+                
+                // Only process each key once, and only with the newest timestamp
+                if(processedKeys.find(p.index.key) == processedKeys.end() && 
+                   p.time == keyMaxTime[p.index.key]) {
+                    processedKeys.insert(p.index.key);
                     sstable ss;
                     ss.loadFile(sstableIndex[p.sstableHeadI][p.sstableHeadJ].getFilename().data());
                     uint32_t len;
                     int offset = ss.searchOffset(p.index.key, len);
-                    int totalOffset = offset + 32 + 10240 + 12 * ss.getCnt();
                     if(offset != -1) {
-                        // 使用 fetchString 读取数据
+                        int totalOffset = offset + 32 + 10240 + 12 * ss.getCnt();
                         std::string value = fetchString(
                             ss.getFilename(),
                             totalOffset,
                             len
                         );
-                        // 将key-value对插入新的SSTable
-                        uint32_t nxtBytes = newTable.getHead().getBytes() + 12 + value.length();
-                        if(!(nxtBytes > MAXSIZE))
-                        {
-                            newTable.insert(p.index.key, value);
-                        }
-                        // 将key-value对插入新的SSTable
-                        // if(!(newTable.checkSize(value,curLevel,0)))
-                        // {
-                        //     newTable.insert(p.index.key, value);
-                        // }
-                        else
-                        {
-                            std::string filename = newPath + std::to_string(++TIME) + ".sst";
-                            newTable.setFilename(filename);  // 设置文件名
-                            newTable.setTime(TIME);
-                            newTable.putFile(newTable.getFilename().data());
-                            addsstable(newTable,curLevel+1);
-                            newTable.reset();
-                            //newTable.setFilename(newPath + std::to_string(++TIME) + ".sst");
-                            newTable.insert(p.index.key, value);
-                        }
+                        
+                        // Check if new SSTable can fit this entry
+                        
                     }
                 }
             }
+            
+            // Flush the final SSTable if it has entries
             if(newTable.getCnt() > 0) {
                 std::string filename = newPath + std::to_string(++TIME) + ".sst";
+                newTable.setFilename(filename);
                 newTable.setTime(TIME);
-                newTable.setFilename(filename);  // 设置文件名
                 newTable.putFile(newTable.getFilename().data());
-                addsstable(newTable,curLevel+1);
+                addsstable(newTable, curLevel+1);
                 newTable.reset();
             }
-
-            for(auto &it : waitlist)
-            {
+            
+            // Delete processed SSTables
+            for(auto &it : waitlist) {
                 delsstable(it.tmp.getFilename());
             }
             waitlist.clear();
         }
     }
-//在合并的时候如果遇到相同键K的多条记录，通过比较时间戳来决定K的最新值，时间戳大的被保留。
-//完成一次合并操作需要更新涉及到的SSTable在内存中的缓存信息。也就是sstableindex
-    // TODO here
 }
+
+
+
+
+// void KVStore::compaction() {
+//     int curLevel = 0;
+//     uint64_t minVtmp = UINT64_MAX, maxVtmp = 0;
+//     std::vector<waitStruct> waitlist;
+//     std::priority_queue<poi, std::vector<poi>, cmpPoi> pq;
+//     std::unordered_set<uint64_t> processedKeys;
+//     std::unordered_map<uint64_t, uint64_t> keyMaxTime;
+//     int j = 0;
+//     int sizeCur, sizeNxt;
+//     bool updateLevel = false;
+//     sstable newTable;
+//     std::string newPath;
+    
+//     for(; curLevel <= totalLevel; curLevel++) {
+//         updateLevel = false;
+//         sizeCur = sstableIndex[curLevel].size();
+//         sizeNxt = (curLevel + 1 <= totalLevel) ? sstableIndex[curLevel+1].size() : 0;
+        
+//         if(sizeCur > pow(2, curLevel+1)) {
+//             // Prepare for next level
+//             if(sizeNxt == 0) {
+//                 updateLevel = true;
+//                 totalLevel++;
+//             }            
+//             waitlist.clear();
+//             processedKeys.clear();
+//             keyMaxTime.clear();
+//             minVtmp = UINT64_MAX;
+//             maxVtmp = 0;
+        
+
+//             if(curLevel == 0) {
+//                 //Level 0: take all SSTables
+//                 j = 0;
+//                 for(; j < sizeCur; j++) {
+//                 if(minVtmp > sstableIndex[curLevel][j].getMinV())
+//                     minVtmp = sstableIndex[curLevel][j].getMinV();
+//                 if(maxVtmp < sstableIndex[curLevel][j].getMaxV())
+//                     maxVtmp = sstableIndex[curLevel][j].getMaxV();
+//                 waitlist.push_back(waitStruct(sstableIndex[curLevel][j], curLevel, j));
+//             }
+//             } else {
+//                 std::vector<SSTableWithPos> candidates;
+//                 for (int j = 0; j < sizeCur; j++) {
+//                     candidates.push_back({
+//                         sstableIndex[curLevel][j],
+//                         curLevel,
+//                         j
+//                     });
+//                 }
+                
+//                 // Sort by timestamp and key
+//                 std::sort(candidates.begin(), candidates.end(), [](const auto& a, const auto& b) {
+//                     if (a.table.getTime() != b.table.getTime()) {
+//                         return a.table.getTime() < b.table.getTime();
+//                     }
+//                     return a.table.getMinV() < b.table.getMinV();
+//                 });
+                
+//                 int tablesToSelect = sizeCur - pow(2, curLevel+1);
+//                 for(j = 0; j < tablesToSelect && j < candidates.size(); j++) {
+//                     if(minVtmp > candidates[j].table.getMinV())
+//                         minVtmp = candidates[j].table.getMinV();
+//                     if(maxVtmp < candidates[j].table.getMaxV())
+//                         maxVtmp = candidates[j].table.getMaxV();
+//                     waitlist.push_back(waitStruct(candidates[j].table, candidates[j].i, candidates[j].j));
+//                 }
+//             }
+            
+//             // Add overlapping SSTables from next level
+//             if(!updateLevel && (curLevel + 1 <= totalLevel)) {
+//                 for(int j = 0; j < sizeNxt; j++) {
+//                     if(!(sstableIndex[curLevel+1][j].getMaxV() < minVtmp || 
+//                          sstableIndex[curLevel+1][j].getMinV() > maxVtmp)) {
+//                         waitlist.push_back(waitStruct(sstableIndex[curLevel+1][j], curLevel+1, j));
+//                     }
+//                 }
+//             }
+            
+//             // Find the maximum timestamp for each key
+//             for(auto &it : waitlist) {
+//                 for(int i = 0; i < it.tmp.getCnt(); i++) {
+//                     uint64_t key = it.tmp.getKey(i);
+//                     if(keyMaxTime.find(key) == keyMaxTime.end() || keyMaxTime[key] < it.tmp.getTime())
+//                         keyMaxTime[key] = it.tmp.getTime();
+//                 }
+//             }
+            
+//             // Push all keys into priority queue
+//             while(!pq.empty()) 
+//                 pq.pop(); // Clear the priority queue
+
+//             for(auto &it : waitlist) {
+//                 for(int i = 0; i < it.tmp.getCnt(); i++) {
+//                     poi p;
+//                     p.pos = i;  // Store the position in the SSTable
+//                     p.index = it.tmp.getIndexById(i);
+//                     p.time = it.tmp.getTime();
+//                     p.sstableHeadI = it.sstableHeadI;
+//                     p.sstableHeadJ = it.sstableHeadJ;
+//                     pq.push(p);
+//                 }
+//             }
+            
+//             // Create new directory for next level if needed
+//             newPath = "./data/level-" + std::to_string(curLevel + 1) + "/";
+//             if (!utils::dirExists(newPath)) {
+//                 utils::mkdir(newPath.data());
+//             }
+            
+//             // Create new SSTable(s) with merged data
+//             processedKeys.clear();
+//             while(!pq.empty()) {
+//                 poi p = pq.top();
+//                 pq.pop();
+                
+//                 // Only process each key once, and only with the newest timestamp
+//                 if(processedKeys.find(p.index.key) == processedKeys.end() && 
+//                    p.time == keyMaxTime[p.index.key]) {
+//                     processedKeys.insert(p.index.key);
+//                     sstable ss;
+//                     ss.loadFile(sstableIndex[p.sstableHeadI][p.sstableHeadJ].getFilename().data());
+//                     uint32_t len;
+//                     int offset = ss.searchOffset(p.index.key, len);
+//                     if(offset != -1) {
+//                         int totalOffset = offset + 32 + 10240 + 12 * ss.getCnt();
+//                         std::string value = fetchString(
+//                             ss.getFilename(),
+//                             totalOffset,
+//                             len
+//                         );
+                        
+//                         // Check if new SSTable can fit this entry
+//                         uint32_t nxtBytes = newTable.getHead().getBytes() + 12 + value.length();
+//                         if(nxtBytes <= MAXSIZE) {
+//                             newTable.insert(p.index.key, value);
+//                         } else {
+//                             // Flush current SSTable and create a new one
+//                             std::string filename = newPath + std::to_string(++TIME) + ".sst";
+//                             newTable.setFilename(filename);
+//                             newTable.setTime(TIME);
+//                             newTable.putFile(newTable.getFilename().data());
+//                             addsstable(newTable, curLevel+1);
+//                             newTable.reset();
+//                             newTable.insert(p.index.key, value);
+//                         }
+//                     }
+//                 }
+//             }
+            
+//             // Flush the final SSTable if it has entries
+//             if(newTable.getCnt() > 0) {
+//                 std::string filename = newPath + std::to_string(++TIME) + ".sst";
+//                 newTable.setFilename(filename);
+//                 newTable.setTime(TIME);
+//                 newTable.putFile(newTable.getFilename().data());
+//                 addsstable(newTable, curLevel+1);
+//                 newTable.reset();
+//             }
+            
+//             // Delete processed SSTables
+//             for(auto &it : waitlist) {
+//                 delsstable(it.tmp.getFilename());
+//             }
+//             waitlist.clear();
+//         }
+//     }
+// }
+
+
+
+
+
 
 void KVStore::delsstable(std::string filename) {
     for (int level = 0; level <= totalLevel; ++level) {
@@ -559,7 +753,8 @@ std::string KVStore::fetchString(std::string file, int startOffset, uint32_t len
             // 读取错误
             std::cerr << "Error reading file: " << strerror(errno) << std::endl;
         }
-}
+    }
     fclose(fp);
     return std::string(strBuf, len);
 }
+
