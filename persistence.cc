@@ -8,6 +8,7 @@
 class PersistenceTest : public Test {
 private:
     //	const uint64_t TEST_MAX = 1024 * 32;
+
     const uint64_t TEST_MAX = 1024 * 32;
 
     void prepare(uint64_t max) {
@@ -62,11 +63,11 @@ private:
          * Write 10MB data to drain previous data out of memory.
          */
         for (i = 0; i <= 10240; ++i)
-            {
-                if(i==10240)
-                    std::cout << "hh";
-                store.put(max + i, std::string(1024, 'x'));
-            }
+        {
+            store.put(max + i, std::string(1024, 'x'));
+        }
+        phase();
+
         std::cout << "Data is ready, please press ctrl-c/ctrl-d to"
                      " terminate this program!"
                   << std::endl;
@@ -92,12 +93,15 @@ private:
                 store.put(max + i, std::string(512, 'x'));
             }
         }
+        EXPECT(std::string(2, 's'), store.get(1));
+        phase();
+
         
     }
 
     void test(uint64_t max) {
         uint64_t i;
-        // Test data
+        // Test datareste
         for (i = 0; i < max; ++i) {
             switch (i & 3) {
             case 0:
@@ -116,7 +120,7 @@ private:
                 assert(0);
             }
         }
-
+        EXPECT(std::string(2, 's'), store.get(1));
         phase();
 
         report();
