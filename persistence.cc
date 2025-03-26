@@ -31,14 +31,16 @@ private:
 
         // Test deletions
         for (i = 0; i < max; i += 2)
-            EXPECT(true, store.del(i));
-
-        // Prepare data for Test Mode
-        for (i = 0; i < max; ++i) {
-            if(i == 4061)
+        {
+            if(i == 20292)
             {
                 int a = 1;
             }
+                EXPECT(true, store.del(i));
+        }
+
+        // Prepare data for Test Mode
+        for (i = 0; i < max; ++i) {
             switch (i & 3) {
             case 0: // 4k
                 EXPECT(not_found, store.get(i));

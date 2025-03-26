@@ -329,9 +329,45 @@ bool isPathOfLevel(const std::string& path, int level) {
 // };
 
 
-
-std::vector<std::pair<uint64_t, std::string>>  mergeSort(std::vector<std::pair<uint64_t, std::string>> pre, std::vector<std::pair<uint64_t, std::string>> new)
+std::vector<KVT>  KVStore::mergeSort(std::vector<KVT> left, std::vector<KVT> right )
 {
+    std::vector<KVT> result;
+    int leftIndex = 0, rightIndex = 0;
+
+    while (leftIndex < left.size() && rightIndex < right.size()) {
+        if(left[leftIndex].key==20292||right[rightIndex].key==20292)
+        {
+            int a = 1;
+        }
+        if (left[leftIndex].key < right[rightIndex].key) {
+            result.push_back(left[leftIndex]);
+            leftIndex++;
+        } else if(left[leftIndex].key > right[rightIndex].key) {
+            result.push_back(right[rightIndex]);
+            rightIndex++;
+        }
+        else
+        {
+            if(left[leftIndex].time > right[rightIndex].time)
+                result.push_back(left[leftIndex]);
+            else    
+                result.push_back(right[rightIndex]);
+            rightIndex++;
+            leftIndex++;
+        }
+    }
+
+    while (leftIndex < left.size()) {
+        result.push_back(left[leftIndex]);
+        leftIndex++;
+    }
+
+    while (rightIndex < right.size()) {
+        result.push_back(right[rightIndex]);
+        rightIndex++;
+    }
+
+    return result;
 
 }
 
@@ -360,12 +396,10 @@ void KVStore::compaction() {
                 totalLevel++;
             }            
             waitlist.clear();
-            processedKeys.clear();
-            keyMaxTime.clear();
+            // processedKeys.clear();
+            // keyMaxTime.clear();
             minVtmp = UINT64_MAX;
             maxVtmp = 0;
-        
-
             if(curLevel == 0) {
                 //Level 0: take all SSTables
                 j = 0;
@@ -384,16 +418,16 @@ void KVStore::compaction() {
                     });
                 }
                 
-                // Sort by timestamp and key
                 std::sort(candidates.begin(), candidates.end(), [](const auto& a, const auto& b) {
-                    if (a.table.getTime() != b.table.getTime()) {
-                        return a.table.getTime() < b.table.getTime();
+                    if (a.getTime() != b.getTime()) {
+                        return a.getTime() < b.getTime();
                     }
-                    return a.table.getMinV() < b.table.getMinV();
+                    return a.getMinV() < b.getMinV();
                 });
                 
                 int tablesToSelect = sizeCur - pow(2, curLevel+1);
-                for(j = 0; j < tablesToSelect && j < candidates.size(); j++) {
+                for(j = 0; j < tablesToSelect && j < candidates.size(); j++)
+{
                     if(minVtmp > candidates[j].getMinV())
                         minVtmp = candidates[j].getMinV();
                     if(maxVtmp < candidates[j].getMaxV())
@@ -416,14 +450,14 @@ void KVStore::compaction() {
             int sizeWait = waitlist.size();
             sstable sstables[sizeWait];
             sstablehead sstableheads[sizeWait];
-            std::vector<std::pair<uint64_t, std::string>>  kvs;
-            std::vector<std::pair<uint64_t, std::string>>  mergedKVs;
+            std::vector<KVT>  kvs;
+            std::vector<KVT>  mergedKVs;
             for(int i = 0;i<sizeWait;i++) {
                 sstables[i].loadFile(waitlist[i].getFilename().data());
                 sstableheads[i] = sstables[i].getHead();
                 kvs.clear();
                 for(int j = 0;j<sstableheads[i].getCnt();j++) {
-                    kvs.push_back(std::make_pair(sstableheads[i].getKey(j), sstables[i].getData(j)));
+                    kvs.push_back(KVT(sstableheads[i].getKey(j), sstables[i].getData(j),sstableheads[i].getTime()));
                 }
                 mergedKVs = mergeSort(mergedKVs,kvs);
                 // for(int i = 0; i < waitlist[i].getCnt(); i++) {
@@ -441,11 +475,11 @@ void KVStore::compaction() {
              
             for(int i = 0;i<mergedKVs.size();i++)
             {
-                std::string value = mergedKVs[i].second;
-                uint64_t 
+                std::string value = mergedKVs[i].value;
+                uint64_t key =mergedKVs[i].key;
                 uint32_t nxtBytes = newTable.getHead().getBytes() + 12 + value.length() ;
                 if(nxtBytes <= MAXSIZE) {
-                    newTable.insert(p.index.key, value);
+                    newTable.insert(key, value);
                 } else {
                     // Flush current SSTable and create a new one
                     std::string filename = newPath + std::to_string(++TIME) + ".sst";
@@ -454,51 +488,51 @@ void KVStore::compaction() {
                     newTable.putFile(newTable.getFilename().data());
                     addsstable(newTable, curLevel+1);
                     newTable.reset();
-                    newTable.insert(p.index.key, value);
+                    newTable.insert(key, value);
                 }
             }
             
-            for(auto &it : waitlist) {
-                for(int i = 0; i < it.tmp.getCnt(); i++) {
-                    poi p;
-                    p.pos = i;  // Store the position in the SSTable
-                    p.index = it.tmp.getIndexById(i);
-                    p.time = it.tmp.getTime();
-                    p.sstableHeadI = it.sstableHeadI;
-                    p.sstableHeadJ = it.sstableHeadJ;
-                    pq.push(p);
-                }
-            }
+            // for(auto &it : waitlist) {
+            //     for(int i = 0; i < it.tmp.getCnt(); i++) {
+            //         poi p;
+            //         p.pos = i;  // Store the position in the SSTable
+            //         p.index = it.tmp.getIndexById(i);
+            //         p.time = it.tmp.getTime();
+            //         p.sstableHeadI = it.sstableHeadI;
+            //         p.sstableHeadJ = it.sstableHeadJ;
+            //         pq.push(p);
+            //     }
+            // }
             
             // Create new directory for next level if needed
             
             // Create new SSTable(s) with merged data
-            processedKeys.clear();
-            while(!pq.empty()) {
-                poi p = pq.top();
-                pq.pop();
+            // processedKeys.clear();
+            // while(!pq.empty()) {
+            //     poi p = pq.top();
+            //     pq.pop();
                 
-                // Only process each key once, and only with the newest timestamp
-                if(processedKeys.find(p.index.key) == processedKeys.end() && 
-                   p.time == keyMaxTime[p.index.key]) {
-                    processedKeys.insert(p.index.key);
-                    sstable ss;
-                    ss.loadFile(sstableIndex[p.sstableHeadI][p.sstableHeadJ].getFilename().data());
-                    uint32_t len;
-                    int offset = ss.searchOffset(p.index.key, len);
-                    if(offset != -1) {
-                        int totalOffset = offset + 32 + 10240 + 12 * ss.getCnt();
-                        std::string value = fetchString(
-                            ss.getFilename(),
-                            totalOffset,
-                            len
-                        );
+            //     // Only process each key once, and only with the newest timestamp
+            //     if(processedKeys.find(p.index.key) == processedKeys.end() && 
+            //        p.time == keyMaxTime[p.index.key]) {
+            //         processedKeys.insert(p.index.key);
+            //         sstable ss;
+            //         ss.loadFile(sstableIndex[p.sstableHeadI][p.sstableHeadJ].getFilename().data());
+            //         uint32_t len;
+            //         int offset = ss.searchOffset(p.index.key, len);
+            //         if(offset != -1) {
+            //             int totalOffset = offset + 32 + 10240 + 12 * ss.getCnt();
+            //             std::string value = fetchString(
+            //                 ss.getFilename(),
+            //                 totalOffset,
+            //                 len
+            //             );
                         
-                        // Check if new SSTable can fit this entry
+            //             // Check if new SSTable can fit this entry
                         
-                    }
-                }
-            }
+            //         }
+            //     }
+            // }
             
             // Flush the final SSTable if it has entries
             if(newTable.getCnt() > 0) {
@@ -512,7 +546,7 @@ void KVStore::compaction() {
             
             // Delete processed SSTables
             for(auto &it : waitlist) {
-                delsstable(it.tmp.getFilename());
+                delsstable(it.getFilename());
             }
             waitlist.clear();
         }

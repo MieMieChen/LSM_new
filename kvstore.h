@@ -8,6 +8,19 @@
 #include <map>
 #include <set>
 
+struct KVT
+{
+    uint64_t key;
+    std::string value;
+    uint64_t time;
+    KVT(uint64_t key, std::string value, uint64_t time)
+    {
+        this->key = key;
+        this->value = value;
+        this->time = time;
+    }
+};
+
 class KVStore : public KVStoreAPI {
     // You can add your implementation here
 private:
@@ -37,5 +50,8 @@ public:
     void delsstable(std::string filename);  // 从缓存中删除filename.sst， 并物理删除
     void addsstable(sstable ss, int level); // 将ss加入缓存
 
+
+    std::vector<KVT> mergeSort(std::vector<KVT> left, std::vector<KVT> right );
     std::string fetchString(std::string file, int startOffset, uint32_t len);
 };
+
