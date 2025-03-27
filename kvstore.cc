@@ -327,7 +327,16 @@ bool isPathOfLevel(const std::string& path, int level) {
 //     int i;          // 在sstableIndex中的层级i
 //     int j;          // 在sstableIndex[level]中的位置j
 // };
-
+struct waitTablehead
+{
+    uint64_t level;
+    sstablehead tablehead;
+    waitTablehead(sstablehead tablehead,uint64_t level)
+    {
+        this->level = level;
+        this->tablehead = tablehead;
+    }
+};
 
 std::vector<KVT>  KVStore::mergeSort(std::vector<KVT> left, std::vector<KVT> right )
 {
@@ -335,7 +344,7 @@ std::vector<KVT>  KVStore::mergeSort(std::vector<KVT> left, std::vector<KVT> rig
     int leftIndex = 0, rightIndex = 0;
 
     while (leftIndex < left.size() && rightIndex < right.size()) {
-        if(left[leftIndex].key==20292||right[rightIndex].key==20292)
+        if(left[leftIndex].key==4061||right[rightIndex].key==4061)
         {
             int a = 1;
         }
@@ -348,10 +357,21 @@ std::vector<KVT>  KVStore::mergeSort(std::vector<KVT> left, std::vector<KVT> rig
         }
         else
         {
-            if(left[leftIndex].time > right[rightIndex].time)
+            if(left[leftIndex].level<right[rightIndex].level)
+            {
                 result.push_back(left[leftIndex]);
-            else    
+            }
+            else if(left[leftIndex].level>right[rightIndex].level)
+            {
                 result.push_back(right[rightIndex]);
+            }
+            else
+            {
+                if(left[leftIndex].time > right[rightIndex].time)
+                    result.push_back(left[leftIndex]);
+                else    
+                    result.push_back(right[rightIndex]);
+            }
             rightIndex++;
             leftIndex++;
         }
@@ -374,7 +394,7 @@ std::vector<KVT>  KVStore::mergeSort(std::vector<KVT> left, std::vector<KVT> rig
 void KVStore::compaction() {
     int curLevel = 0;
     uint64_t minVtmp = UINT64_MAX, maxVtmp = 0;
-    std::vector<sstablehead> waitlist;
+    std::vector<waitTablehead> waitlist;
     std::priority_queue<poi, std::vector<poi>, cmpPoi> pq;
     std::unordered_set<uint64_t> processedKeys;
    //  std::unordered_map<uint64_t, uint64_t> keyMaxTime;
@@ -386,9 +406,12 @@ void KVStore::compaction() {
     
     for(; curLevel <= totalLevel; curLevel++) {
         updateLevel = false;
-        sizeCur = sstableIndex[curLevel].size();
-        sizeNxt = (curLevel + 1 <= totalLevel) ? sstableIndex[curLevel+1].size() : 0;
-        
+        // sizeCur = sstableIndex[curLevel].size();
+        // sizeNxt = (curLevel + 1 <= totalLevel) ? sstableIndex[curLevel+1].size() : 0;
+        int num = 0;
+        std::vector<std::string> filesCur,filesNxt;
+        sizeCur = utils::scanDir("./data/level-" + std::to_string(curLevel),filesCur);
+        sizeNxt = (curLevel + 1 <= totalLevel) ? utils::scanDir("./data/level-" + std::to_string(curLevel+1), filesNxt) : 0;
         if(sizeCur > pow(2, curLevel+1)) {
             // Prepare for next level
             if(sizeNxt == 0) {
@@ -408,30 +431,30 @@ void KVStore::compaction() {
                     minVtmp = sstableIndex[curLevel][j].getMinV();
                 if(maxVtmp < sstableIndex[curLevel][j].getMaxV())
                     maxVtmp = sstableIndex[curLevel][j].getMaxV();
-                waitlist.push_back(sstableIndex[curLevel][j]);
+                waitlist.push_back(waitTablehead(sstableIndex[curLevel][j],curLevel));
             }
             } else {
-                std::vector<sstablehead> candidates;
+                std::vector<waitTablehead> candidates;
                 for (int j = 0; j < sizeCur; j++) {
-                    candidates.push_back({
-                        sstableIndex[curLevel][j],
+                    candidates.push_back({waitTablehead(
+                        sstableIndex[curLevel][j],curLevel)
                     });
                 }
                 
                 std::sort(candidates.begin(), candidates.end(), [](const auto& a, const auto& b) {
-                    if (a.getTime() != b.getTime()) {
-                        return a.getTime() < b.getTime();
+                    if (a.tablehead.getTime() != b.tablehead.getTime()) {
+                        return a.tablehead.getTime() < b.tablehead.getTime();
                     }
-                    return a.getMinV() < b.getMinV();
+                    return a.tablehead.getMinV() < b.tablehead.getMinV();
                 });
                 
                 int tablesToSelect = sizeCur - pow(2, curLevel+1);
                 for(j = 0; j < tablesToSelect && j < candidates.size(); j++)
 {
-                    if(minVtmp > candidates[j].getMinV())
-                        minVtmp = candidates[j].getMinV();
-                    if(maxVtmp < candidates[j].getMaxV())
-                        maxVtmp = candidates[j].getMaxV();
+                    if(minVtmp > candidates[j].tablehead.getMinV())
+                        minVtmp = candidates[j].tablehead.getMinV();
+                    if(maxVtmp < candidates[j].tablehead.getMaxV())
+                        maxVtmp = candidates[j].tablehead.getMaxV();
                     waitlist.push_back(candidates[j]);
                 }
             }
@@ -441,7 +464,7 @@ void KVStore::compaction() {
                 for(int j = 0; j < sizeNxt; j++) {
                     if(!(sstableIndex[curLevel+1][j].getMaxV() < minVtmp || 
                          sstableIndex[curLevel+1][j].getMinV() > maxVtmp)) {
-                        waitlist.push_back(sstableIndex[curLevel+1][j]);
+                        waitlist.push_back(waitTablehead(sstableIndex[curLevel+1][j],curLevel+1));
                     }
                 }
             }
@@ -453,11 +476,11 @@ void KVStore::compaction() {
             std::vector<KVT>  kvs;
             std::vector<KVT>  mergedKVs;
             for(int i = 0;i<sizeWait;i++) {
-                sstables[i].loadFile(waitlist[i].getFilename().data());
+                sstables[i].loadFile(waitlist[i].tablehead.getFilename().data());
                 sstableheads[i] = sstables[i].getHead();
                 kvs.clear();
                 for(int j = 0;j<sstableheads[i].getCnt();j++) {
-                    kvs.push_back(KVT(sstableheads[i].getKey(j), sstables[i].getData(j),sstableheads[i].getTime()));
+                    kvs.push_back(KVT(sstableheads[i].getKey(j), sstables[i].getData(j),sstableheads[i].getTime(),waitlist[i].level));
                 }
                 mergedKVs = mergeSort(mergedKVs,kvs);
                 // for(int i = 0; i < waitlist[i].getCnt(); i++) {
@@ -546,7 +569,7 @@ void KVStore::compaction() {
             
             // Delete processed SSTables
             for(auto &it : waitlist) {
-                delsstable(it.getFilename());
+                delsstable(it.tablehead.getFilename());
             }
             waitlist.clear();
         }
@@ -778,6 +801,7 @@ std::string KVStore::fetchString(std::string file, int startOffset, uint32_t len
     }   
     fseek(fp, startOffset, SEEK_SET);
     size_t bytesRead = fread(strBuf, 1, len, fp);
+    strBuf[len] = '\0';
     if (bytesRead != len) {
         // 处理错误：未能读取所有请求的字节
         if (feof(fp)) {

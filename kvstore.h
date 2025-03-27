@@ -13,11 +13,13 @@ struct KVT
     uint64_t key;
     std::string value;
     uint64_t time;
-    KVT(uint64_t key, std::string value, uint64_t time)
+    uint64_t level;
+    KVT(uint64_t key, std::string value, uint64_t time,uint64_t level)
     {
         this->key = key;
         this->value = value;
         this->time = time;
+        this->level = level;
     }
 };
 

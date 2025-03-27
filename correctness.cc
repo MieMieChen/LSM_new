@@ -146,21 +146,21 @@ public:
     CorrectnessTest(const std::string &dir, bool v = true) : Test(dir, v) {}
 
     void start_test(void *args = NULL) override {
-        // std::cout << "KVStore Correctness Test" << std::endl;
+        std::cout << "KVStore Correctness Test" << std::endl;
 
-        // store.reset();
+        store.reset();
 
-        // std::cout << "[Simple Test]" << std::endl;
-        // regular_test(SIMPLE_TEST_MAX);
+        std::cout << "[Simple Test]" << std::endl;
+        regular_test(SIMPLE_TEST_MAX);
 
-        // store.reset();
+        store.reset();
 
-        // std::cout << "[Large Test]" << std::endl;
-        // regular_test(1024 * 64);
+        std::cout << "[Large Test]" << std::endl;
+        regular_test(1024 * 64);
 
-        // store.reset();
-        // std::cout << "[Insert Test]" << std::endl;
-        // insert_test(1024 * 16);
+        store.reset();
+        std::cout << "[Insert Test]" << std::endl;
+        insert_test(1024 * 16);
 
         store.reset();
         std::cout << "[delete test]" << std::endl;
