@@ -9,7 +9,7 @@ class PersistenceTest : public Test {
 private:
     //	const uint64_t TEST_MAX = 1024 * 32;
 
-    const uint64_t TEST_MAX = 1024 * 32;  //16可以pass了
+    const uint64_t TEST_MAX = 1024 * 32;  //32,20,16都可以pass了
 
     void prepare(uint64_t max) {
         uint64_t i;
