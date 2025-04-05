@@ -7,7 +7,6 @@
 #include <cstdint>
 #include <vector>
 #include <limits>
-
 struct Index {
     uint64_t key;
     uint32_t offset;

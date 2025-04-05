@@ -6,6 +6,7 @@
 #include "sstablehead.h"
 #include "embedding.h"
 #include "hnsw.h"
+#include "embedding.h"
 #include <map>
 #include <set>
 #include <unordered_map>

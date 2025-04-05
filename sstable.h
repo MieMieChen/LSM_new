@@ -5,7 +5,6 @@
 #include "bloom.h"
 #include "skiplist.h"
 #include "sstablehead.h"
-
 #include <cstdint>
 #include <vector>
 #include <limits>

@@ -4,7 +4,6 @@
 
 #include <bitset>
 #include <cstdint>
-
 const uint32_t M = 10240;
 
 class bloom {

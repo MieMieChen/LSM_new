@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <iostream>
 #include <string>
-
+#include "embedding.h"
 class Test {
 protected:
     static const std::string not_found;
@@ -26,7 +26,7 @@ protected:
         }
         else
         {
-            std::cout << "fail" <<std::endl;
+           // std::cout << "fail" <<std::endl;
         }
         if (verbose) {
             std::cerr << "TEST Error @" << file << ":" << line;

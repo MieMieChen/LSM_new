@@ -4,7 +4,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <vector>
-
+#include "embedding.h"
 #ifdef _WIN32
 #include <direct.h>
 #include <io.h>

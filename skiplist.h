@@ -1,6 +1,5 @@
 #ifndef LSM_KV_SKIPLIST_H
 #define LSM_KV_SKIPLIST_H
-
 #include <cstdint>
 #include <limits>
 #include <list>
