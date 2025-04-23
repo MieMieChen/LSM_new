@@ -3,7 +3,7 @@
 #include "skiplist.h"
 #include "sstable.h"
 #include "utils.h"
-
+#include "hnsw.h"
 #include <algorithm>
 #include <cstdlib>
 #include <iostream>
@@ -17,6 +17,8 @@
 
 static const std::string DEL = "~DELETED~";
 const uint32_t MAXSIZE       = 2 * 1024 * 1024;
+
+
 
 struct poi {
     int sstableId; // vector中第几个sstable
@@ -90,7 +92,12 @@ KVStore::~KVStore()
  * No return values for simplicity.
  */
 void KVStore::put(uint64_t key, const std::string &val) {
+    std::vector<float> embeddingString = embedding_single(val);
+    Cache[key]= embeddingString;
 
+    hnsw_index.insert(key, embeddingString);
+
+    
     uint32_t nxtsize = s->getBytes();
     std::string res  = s->search(key);
     if (!res.length()) { // new add
@@ -124,10 +131,6 @@ void KVStore::put(uint64_t key, const std::string &val) {
  */
 std::string KVStore::get(uint64_t key) //
 {
-    // if(key==2030)
-    // {
-    //     std::cout << "get bugs"<<std::endl;
-    // }
     uint64_t time = 0;
     int goalOffset;
     uint32_t goalLen;
@@ -176,6 +179,7 @@ std::string KVStore::get(uint64_t key) //
  * Returns false iff the key is not found.
  */
 bool KVStore::del(uint64_t key) {
+    Cache.erase(key);
     std::string res = get(key);
     if (!res.length())
         return false; // not exist
@@ -514,49 +518,6 @@ void KVStore::compaction() {
                     newTable.insert(key, value);
                 }
             }
-            
-            // for(auto &it : waitlist) {
-            //     for(int i = 0; i < it.tmp.getCnt(); i++) {
-            //         poi p;
-            //         p.pos = i;  // Store the position in the SSTable
-            //         p.index = it.tmp.getIndexById(i);
-            //         p.time = it.tmp.getTime();
-            //         p.sstableHeadI = it.sstableHeadI;
-            //         p.sstableHeadJ = it.sstableHeadJ;
-            //         pq.push(p);
-            //     }
-            // }
-            
-            // Create new directory for next level if needed
-            
-            // Create new SSTable(s) with merged data
-            // processedKeys.clear();
-            // while(!pq.empty()) {
-            //     poi p = pq.top();
-            //     pq.pop();
-                
-            //     // Only process each key once, and only with the newest timestamp
-            //     if(processedKeys.find(p.index.key) == processedKeys.end() && 
-            //        p.time == keyMaxTime[p.index.key]) {
-            //         processedKeys.insert(p.index.key);
-            //         sstable ss;
-            //         ss.loadFile(sstableIndex[p.sstableHeadI][p.sstableHeadJ].getFilename().data());
-            //         uint32_t len;
-            //         int offset = ss.searchOffset(p.index.key, len);
-            //         if(offset != -1) {
-            //             int totalOffset = offset + 32 + 10240 + 12 * ss.getCnt();
-            //             std::string value = fetchString(
-            //                 ss.getFilename(),
-            //                 totalOffset,
-            //                 len
-            //             );
-                        
-            //             // Check if new SSTable can fit this entry
-                        
-            //         }
-            //     }
-            // }
-            
             // Flush the final SSTable if it has entries
             if(newTable.getCnt() > 0) {
                 std::string filename = newPath + std::to_string(++TIME) + ".sst";
@@ -575,184 +536,6 @@ void KVStore::compaction() {
         }
     }
 }
-
-
-
-
-// void KVStore::compaction() {
-//     int curLevel = 0;
-//     uint64_t minVtmp = UINT64_MAX, maxVtmp = 0;
-//     std::vector<waitStruct> waitlist;
-//     std::priority_queue<poi, std::vector<poi>, cmpPoi> pq;
-//     std::unordered_set<uint64_t> processedKeys;
-//     std::unordered_map<uint64_t, uint64_t> keyMaxTime;
-//     int j = 0;
-//     int sizeCur, sizeNxt;
-//     bool updateLevel = false;
-//     sstable newTable;
-//     std::string newPath;
-    
-//     for(; curLevel <= totalLevel; curLevel++) {
-//         updateLevel = false;
-//         sizeCur = sstableIndex[curLevel].size();
-//         sizeNxt = (curLevel + 1 <= totalLevel) ? sstableIndex[curLevel+1].size() : 0;
-        
-//         if(sizeCur > pow(2, curLevel+1)) {
-//             // Prepare for next level
-//             if(sizeNxt == 0) {
-//                 updateLevel = true;
-//                 totalLevel++;
-//             }            
-//             waitlist.clear();
-//             processedKeys.clear();
-//             keyMaxTime.clear();
-//             minVtmp = UINT64_MAX;
-//             maxVtmp = 0;
-        
-
-//             if(curLevel == 0) {
-//                 //Level 0: take all SSTables
-//                 j = 0;
-//                 for(; j < sizeCur; j++) {
-//                 if(minVtmp > sstableIndex[curLevel][j].getMinV())
-//                     minVtmp = sstableIndex[curLevel][j].getMinV();
-//                 if(maxVtmp < sstableIndex[curLevel][j].getMaxV())
-//                     maxVtmp = sstableIndex[curLevel][j].getMaxV();
-//                 waitlist.push_back(waitStruct(sstableIndex[curLevel][j], curLevel, j));
-//             }
-//             } else {
-//                 std::vector<SSTableWithPos> candidates;
-//                 for (int j = 0; j < sizeCur; j++) {
-//                     candidates.push_back({
-//                         sstableIndex[curLevel][j],
-//                         curLevel,
-//                         j
-//                     });
-//                 }
-                
-//                 // Sort by timestamp and key
-//                 std::sort(candidates.begin(), candidates.end(), [](const auto& a, const auto& b) {
-//                     if (a.table.getTime() != b.table.getTime()) {
-//                         return a.table.getTime() < b.table.getTime();
-//                     }
-//                     return a.table.getMinV() < b.table.getMinV();
-//                 });
-                
-//                 int tablesToSelect = sizeCur - pow(2, curLevel+1);
-//                 for(j = 0; j < tablesToSelect && j < candidates.size(); j++) {
-//                     if(minVtmp > candidates[j].table.getMinV())
-//                         minVtmp = candidates[j].table.getMinV();
-//                     if(maxVtmp < candidates[j].table.getMaxV())
-//                         maxVtmp = candidates[j].table.getMaxV();
-//                     waitlist.push_back(waitStruct(candidates[j].table, candidates[j].i, candidates[j].j));
-//                 }
-//             }
-            
-//             // Add overlapping SSTables from next level
-//             if(!updateLevel && (curLevel + 1 <= totalLevel)) {
-//                 for(int j = 0; j < sizeNxt; j++) {
-//                     if(!(sstableIndex[curLevel+1][j].getMaxV() < minVtmp || 
-//                          sstableIndex[curLevel+1][j].getMinV() > maxVtmp)) {
-//                         waitlist.push_back(waitStruct(sstableIndex[curLevel+1][j], curLevel+1, j));
-//                     }
-//                 }
-//             }
-            
-//             // Find the maximum timestamp for each key
-//             for(auto &it : waitlist) {
-//                 for(int i = 0; i < it.tmp.getCnt(); i++) {
-//                     uint64_t key = it.tmp.getKey(i);
-//                     if(keyMaxTime.find(key) == keyMaxTime.end() || keyMaxTime[key] < it.tmp.getTime())
-//                         keyMaxTime[key] = it.tmp.getTime();
-//                 }
-//             }
-            
-//             // Push all keys into priority queue
-//             while(!pq.empty()) 
-//                 pq.pop(); // Clear the priority queue
-
-//             for(auto &it : waitlist) {
-//                 for(int i = 0; i < it.tmp.getCnt(); i++) {
-//                     poi p;
-//                     p.pos = i;  // Store the position in the SSTable
-//                     p.index = it.tmp.getIndexById(i);
-//                     p.time = it.tmp.getTime();
-//                     p.sstableHeadI = it.sstableHeadI;
-//                     p.sstableHeadJ = it.sstableHeadJ;
-//                     pq.push(p);
-//                 }
-//             }
-            
-//             // Create new directory for next level if needed
-//             newPath = "./data/level-" + std::to_string(curLevel + 1) + "/";
-//             if (!utils::dirExists(newPath)) {
-//                 utils::mkdir(newPath.data());
-//             }
-            
-//             // Create new SSTable(s) with merged data
-//             processedKeys.clear();
-//             while(!pq.empty()) {
-//                 poi p = pq.top();
-//                 pq.pop();
-                
-//                 // Only process each key once, and only with the newest timestamp
-//                 if(processedKeys.find(p.index.key) == processedKeys.end() && 
-//                    p.time == keyMaxTime[p.index.key]) {
-//                     processedKeys.insert(p.index.key);
-//                     sstable ss;
-//                     ss.loadFile(sstableIndex[p.sstableHeadI][p.sstableHeadJ].getFilename().data());
-//                     uint32_t len;
-//                     int offset = ss.searchOffset(p.index.key, len);
-//                     if(offset != -1) {
-//                         int totalOffset = offset + 32 + 10240 + 12 * ss.getCnt();
-//                         std::string value = fetchString(
-//                             ss.getFilename(),
-//                             totalOffset,
-//                             len
-//                         );
-                        
-//                         // Check if new SSTable can fit this entry
-//                         uint32_t nxtBytes = newTable.getHead().getBytes() + 12 + value.length();
-//                         if(nxtBytes <= MAXSIZE) {
-//                             newTable.insert(p.index.key, value);
-//                         } else {
-//                             // Flush current SSTable and create a new one
-//                             std::string filename = newPath + std::to_string(++TIME) + ".sst";
-//                             newTable.setFilename(filename);
-//                             newTable.setTime(TIME);
-//                             newTable.putFile(newTable.getFilename().data());
-//                             addsstable(newTable, curLevel+1);
-//                             newTable.reset();
-//                             newTable.insert(p.index.key, value);
-//                         }
-//                     }
-//                 }
-//             }
-            
-//             // Flush the final SSTable if it has entries
-//             if(newTable.getCnt() > 0) {
-//                 std::string filename = newPath + std::to_string(++TIME) + ".sst";
-//                 newTable.setFilename(filename);
-//                 newTable.setTime(TIME);
-//                 newTable.putFile(newTable.getFilename().data());
-//                 addsstable(newTable, curLevel+1);
-//                 newTable.reset();
-//             }
-            
-//             // Delete processed SSTables
-//             for(auto &it : waitlist) {
-//                 delsstable(it.tmp.getFilename());
-//             }
-//             waitlist.clear();
-//         }
-//     }
-// }
-
-
-
-
-
-
 void KVStore::delsstable(std::string filename) {
     for (int level = 0; level <= totalLevel; ++level) {
         int size = sstableIndex[level].size(), flag = 0;
@@ -815,4 +598,70 @@ std::string KVStore::fetchString(std::string file, int startOffset, uint32_t len
     fclose(fp);
     return std::string(strBuf, len);
 }
+float  KVStore::cosine_similarity(std::vector<float> a,std::vector<float> b)
+{
+    float result = 0.0f;
+    result = dot_product(a,b)/(vector_norm(a)*vector_norm(b));
+    return result;
+}
+float KVStore::dot_product(std::vector<float>a,std::vector<float>b)
+{
+    float result = 0.0f;
+    for(size_t i = 0;i<a.size();i++)
+    {
+        result +=a[i]*b[i];
+    }
+    return result;
+}
+float KVStore::vector_norm(std::vector<float>a)
+{
+    float sum = 0.0f;
+    for(float x:a)
+    {
+        sum+=x*x;
+    }
+    return std::sqrt(sum);
+}
 
+std::vector<std::pair<std::uint64_t, std::string>> KVStore::search_knn(std::string query, int k) {
+    std::vector<float> embStr = embedding_single(query);
+    std::vector<std::pair<std::uint64_t, std::string>> result;
+    
+    // 定义小顶堆比较函数
+    auto cmp = [](const auto& a, const auto& b) { return a.first > b.first; };
+    using SimilarityPair = std::pair<float, std::pair<uint64_t, std::string>>;
+    std::priority_queue<SimilarityPair, std::vector<SimilarityPair>, decltype(cmp)> top_k(cmp);
+
+    for (const auto& [key, embedding] : Cache) {
+        
+        float sim = cosine_similarity(embedding, embStr);
+        top_k.push({sim, {key, get(key)}});
+        if (top_k.size() > k) {
+            top_k.pop(); // 移除当前最小的相似度
+        }
+    }
+
+    // 转换为降序排列
+    while (!top_k.empty()) {
+        result.push_back(top_k.top().second);
+        top_k.pop();
+    }
+    std::reverse(result.begin(), result.end()); // 现在 result[0] 是最相似的
+    
+    return result;
+}
+
+std::vector<std::pair<std::uint64_t, std::string>> KVStore::search_knn_hnsw(std::string query, int k)
+{
+    std::vector<float> embStr = embedding_single(query);
+    std::vector<std::pair<std::uint64_t, std::string>> result;
+    result = hnsw_index.query(embStr, k);
+    for(int i = 0; i < result.size(); i++)
+    {
+        result[i].second = get(result[i].first);
+        if(result[i].second == DEL)
+            result[i].second = "";
+    }
+    return result;
+
+}
