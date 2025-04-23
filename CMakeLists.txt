@@ -34,38 +34,38 @@ include_directories(
 add_executable(correctness correctness.cc kvstore_api.h kvstore.h
         kvstore.cc skiplist.cpp skiplist.h sstable.cpp sstable.h
         bloom.cpp bloom.h MurmurHash3.h utils.h test.h embedding/embedding.cc
-        sstablehead.cpp sstablehead.h embedding/embedding.h)
+        sstablehead.cpp sstablehead.h embedding/embedding.h hnsw.cpp hnsw.h)
 target_link_libraries(correctness PRIVATE llama common)
 
 add_executable(E2E_test test/E2E_test.cpp kvstore_api.h kvstore.h
         kvstore.cc skiplist.cpp skiplist.h sstable.cpp sstable.h
         bloom.cpp bloom.h MurmurHash3.h utils.h test.h embedding/embedding.cc
-        sstablehead.cpp sstablehead.h embedding/embedding.h third_party/llama.cpp/common/common.h)
+        sstablehead.cpp sstablehead.h embedding/embedding.h third_party/llama.cpp/common/common.h hnsw.cpp hnsw.h)
 
 target_link_libraries(E2E_test PRIVATE llama common)
 
 add_executable(persistence persistence.cc kvstore_api.h kvstore.h kvstore.cc
         skiplist.cpp skiplist.h sstable.cpp sstable.h
         bloom.cpp bloom.h MurmurHash3.h utils.h test.h
-        sstablehead.cpp sstablehead.h embedding/embedding.h embedding/embedding.cc)
+        sstablehead.cpp sstablehead.h embedding/embedding.h embedding/embedding.cc hnsw.cpp hnsw.h)
 target_link_libraries(persistence PRIVATE llama common)
 
 add_executable(performance_test performance_test.cc kvstore_api.h kvstore.h kvstore.cc
         skiplist.cpp skiplist.h sstable.cpp sstable.h
         bloom.cpp bloom.h MurmurHash3.h utils.h test.h
-        sstablehead.cpp sstablehead.h embedding/embedding.h embedding/embedding.cc)
+        sstablehead.cpp sstablehead.h embedding/embedding.h embedding/embedding.cc hnsw.cpp hnsw.h)
 target_link_libraries(performance_test PRIVATE llama common)
 
 add_executable(performance_test_small performance_test_small.cc kvstore_api.h kvstore.h kvstore.cc
         skiplist.cpp skiplist.h sstable.cpp sstable.h
         bloom.cpp bloom.h MurmurHash3.h utils.h test.h
-        sstablehead.cpp sstablehead.h embedding/embedding.h embedding/embedding.cc)
+        sstablehead.cpp sstablehead.h embedding/embedding.h embedding/embedding.cc hnsw.cpp hnsw.h)
 target_link_libraries(performance_test_small PRIVATE llama common)
 
 add_executable(performance_test_large performance_test_large.cc kvstore_api.h kvstore.h kvstore.cc
         skiplist.cpp skiplist.h sstable.cpp sstable.h
         bloom.cpp bloom.h MurmurHash3.h utils.h test.h
-        sstablehead.cpp sstablehead.h embedding/embedding.h embedding/embedding.cc)
+        sstablehead.cpp sstablehead.h embedding/embedding.h embedding/embedding.cc hnsw.cpp hnsw.h)
 target_link_libraries(performance_test_large PRIVATE llama common)
 
 add_subdirectory(third_party/llama.cpp)

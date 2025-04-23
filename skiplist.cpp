@@ -60,6 +60,7 @@ std::string skiplist::search(uint64_t key)
     }
     return "";
 }
+
 bool skiplist::del(uint64_t key, uint32_t len)
 {
     slnode *cur = head;
@@ -84,6 +85,7 @@ bool skiplist::del(uint64_t key, uint32_t len)
     }
 
 }
+
 void skiplist::scan(uint64_t key1, uint64_t key2, std::vector<std::pair<uint64_t, std::string>> &list)
 {
     slnode *Lnode = lowerBound(key1);

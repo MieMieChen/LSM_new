@@ -52,22 +52,22 @@ private:
 		auto trimmed_text = read_file("../data/trimmed_text.txt");
 		max	= std::min(max, (uint64_t)trimmed_text.size());
 
-        steady_clock::time_point start = steady_clock::now();
+       // steady_clock::time_point start = steady_clock::now();
 		for (i = 0; i < max; ++i) {
 			store.put(i, trimmed_text[i]);
 		}
-        steady_clock::time_point end = steady_clock::now();
-        microseconds duration = duration_cast<microseconds>(end - start);
-        std::cout << "put KV Elapsed time: " << duration.count() << " microseconds\n";
+       // steady_clock::time_point end = steady_clock::now();
+       // microseconds duration = duration_cast<microseconds>(end - start);
+      // std::cout << "put KV Elapsed time: " << duration.count() << " microseconds\n";
 
 
-        steady_clock::time_point start2 = steady_clock::now();
+        //steady_clock::time_point start2 = steady_clock::now();
 		for (i = 0; i < max; ++i)
 			EXPECT(trimmed_text[i], store.get(i));
 		// phase();
-        steady_clock::time_point end2 = steady_clock::now();
-        microseconds duration2 = duration_cast<microseconds>(end2 - start2);
-        std::cout << "get KV Elapsed time: " << duration2.count() << " microseconds\n";
+       // steady_clock::time_point end2 = steady_clock::now();
+        //microseconds duration2 = duration_cast<microseconds>(end2 - start2);
+       // std::cout << "get KV Elapsed time: " << duration2.count() << " microseconds\n";
 
 
 		// run the search_knn, and compare the result to ./data/test_text_ans.txt
@@ -81,13 +81,13 @@ private:
         steady_clock::time_point start5;
         steady_clock::time_point end5;
         microseconds duration5;
-        steady_clock::time_point start3 = steady_clock::now();
+        //steady_clock::time_point start3 = steady_clock::now();
 		for (i = 0; i < max; ++i) {
-            start5 = steady_clock::now();
-			auto res = store.search_knn(test_text[i], k);
-            end5 = steady_clock::now();
-            duration5 = duration_cast<microseconds>(end5 - start5);
-            std::cout << "第i = " << i <<"searchKNN的耗时："<< duration5.count() << " microseconds\n";
+            //start5 = steady_clock::now();
+			auto res = store.search_knn_hnsw(test_text[i], k);
+            //end5 = steady_clock::now();
+           // duration5 = duration_cast<microseconds>(end5 - start5);
+           // std::cout << "第i = " << i <<"searchKNN的耗时："<< duration5.count() << " microseconds\n";
 			for (auto j : res) {
                 if(store.get(j.first) != j.second) {
                     std::cerr << "TEST Error @" << __FILE__ << ":" << __LINE__;
@@ -98,9 +98,9 @@ private:
 				idx++;
 			}
 		}
-        steady_clock::time_point end3 = steady_clock::now();
-        microseconds duration3 = duration_cast<microseconds>(end3 - start3);
-        std::cout << "search_KNN PHASE1 Elapsed time: " << duration3.count() << " microseconds\n";
+       // steady_clock::time_point end3 = steady_clock::now();
+        //microseconds duration3 = duration_cast<microseconds>(end3 - start3);
+        //std::cout << "search_knn_hnsw PHASE1 Elapsed time: " << duration3.count() << " microseconds\n";
 
 
 		auto phase_with_tolerance = [this](double tolerance = 0.03) {
@@ -128,11 +128,11 @@ private:
 			nr_tests		= 0;
 			nr_passed_tests = 0;
 		};
-        steady_clock::time_point start4 = steady_clock::now();
+        //steady_clock::time_point start4 = steady_clock::now();
 		phase_with_tolerance(0.15);
-        steady_clock::time_point end4 = steady_clock::now();
-        microseconds duration4 = duration_cast<microseconds>(end4 - start4);
-        std::cout << "search_KNN PHASE2 Elapsed time: " << duration4.count() << " microseconds\n";
+        // steady_clock::time_point end4 = steady_clock::now();
+        // microseconds duration4 = duration_cast<microseconds>(end4 - start4);
+        // std::cout << "search_knn_hnsw PHASE2 Elapsed time: " << duration4.count() << " microseconds\n";
 	}
 
 public:
