@@ -244,17 +244,36 @@ std::vector<std::pair<std::uint64_t, std::string>> HNSW::query(const std::vector
     // 在第0层进行详细搜索，找到k个最近邻
     std::vector<std::pair<float, uint64_t>> top_candidates;
     std::list<uint64_t> visited;
-    std::list<uint64_t> candidates;
+    std::list<node> candidates;
     
-    candidates.push_back(curr_entry_point);
-    visited.push_back(curr_entry_point);
-    
+    // 计算与入口点的相似度
     float initial_sim = cosine_similarity(query_vector, vectors[curr_entry_point]);
+    candidates.push_back(node(curr_entry_point, initial_sim));
+    visited.push_back(curr_entry_point);
     top_candidates.push_back({initial_sim, curr_entry_point});
     
+    // 使用更大的efSearch参数来提高搜索精度（通常efSearch > efConstruction）
+    int efSearch = std::max(efConstruction, k);
+    
     while(!candidates.empty()) {
-        uint64_t current = candidates.front();
+        // 取出当前候选节点（相似度最高的）
+        candidates.sort([](const node& a, const node& b) {
+            return a.dist > b.dist; // 按相似度降序排列
+        });
+        
+        uint64_t current = candidates.front().id;
+        float current_dist = candidates.front().dist;
         candidates.pop_front();
+        
+        // 如果当前节点的相似度低于top_candidates中最小的，并且我们已经有至少efSearch个候选
+        if(top_candidates.size() >= efSearch) {
+            std::sort(top_candidates.begin(), top_candidates.end(),
+                [](const auto& a, const auto& b) { return a.first < b.first; }); // 按相似度升序
+            
+            if(current_dist < top_candidates[0].first) {
+                continue; // 剪枝：当前节点相似度太低，不继续展开
+            }
+        }
         
         if(layers[0].find(current) == layers[0].end()) {
             continue;
@@ -263,15 +282,25 @@ std::vector<std::pair<std::uint64_t, std::string>> HNSW::query(const std::vector
         for(uint64_t neighbor : layers[0][current]) {
             if(std::find(visited.begin(), visited.end(), neighbor) == visited.end()) {
                 visited.push_back(neighbor);
-                candidates.push_back(neighbor);
                 
                 float dist = cosine_similarity(query_vector, vectors[neighbor]);
+                candidates.push_back(node(neighbor, dist));
                 top_candidates.push_back({dist, neighbor});
+                
+                // 保持top_candidates的大小不超过efSearch
+                if(top_candidates.size() > efSearch * 2) { // 允许增长到2倍大小再裁剪，减少排序次数
+                    std::sort(top_candidates.begin(), top_candidates.end(),
+                        [](const auto& a, const auto& b) { return a.first > b.first; }); // 按相似度降序
+                    
+                    if(top_candidates.size() > efSearch) {
+                        top_candidates.resize(efSearch);
+                    }
+                }
             }
         }
     }
     
-    // 按相似度降序排序
+    // 最终按相似度降序排序
     std::sort(top_candidates.begin(), top_candidates.end(), 
         [](const auto& a, const auto& b) { return a.first > b.first; });
     

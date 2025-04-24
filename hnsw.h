@@ -7,10 +7,10 @@
 #include <vector>
 #include <unordered_map>
 
-#define M 10
-#define M_max 15
-#define efConstruction 30
-#define m_L 6
+#define M 8
+#define M_max 16
+#define efConstruction 25
+#define m_L 9
 
 
 

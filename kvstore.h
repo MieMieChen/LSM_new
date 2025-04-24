@@ -32,12 +32,12 @@ class KVStore : public KVStoreAPI {
 private:
     skiplist *s = new skiplist(0.5); // memtable
     // std::vector<sstablehead> sstableIndex;  // sstable的表头缓存
-    HNSW hnsw_index;
     std::vector<sstablehead> sstableIndex[15]; // the sshead for each level 这个是一个二维的。
     std::unordered_map<std::uint64_t, std::vector<float>> Cache;
     int totalLevel = -1; // 层数
 public:
     KVStore(const std::string &dir);
+    HNSW hnsw_index;
 
     ~KVStore();
 
@@ -62,6 +62,8 @@ public:
     std::vector<KVT> mergeSort(std::vector<KVT> left, std::vector<KVT> right );
     std::string fetchString(std::string file, int startOffset, uint32_t len);
     std::vector<std::pair<std::uint64_t, std::string>>search_knn_hnsw(std::string query, int k);
+    std::vector<std::pair<std::uint64_t, std::string>> query_knn(std::vector<float> embStr,int k);
+
 };
 
 

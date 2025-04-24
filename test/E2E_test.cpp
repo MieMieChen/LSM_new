@@ -10,6 +10,8 @@
 #include <fstream>
 #include <chrono>
 
+static const std::string DEL = "~DELETED~";
+
 std::vector<std::string> read_file(std::string filename) {
 	std::ifstream file(filename);
     if (!file.is_open()) {
@@ -78,27 +80,112 @@ private:
         ans = read_file("../data/test_text_ans.txt");
         phase();
 		int idx = 0, k = 3;
-        steady_clock::time_point start5;
-        steady_clock::time_point end5;
-        microseconds duration5;
-        //steady_clock::time_point start3 = steady_clock::now();
-		for (i = 0; i < max; ++i) {
-            //start5 = steady_clock::now();
-			auto res = store.search_knn_hnsw(test_text[i], k);
-            //end5 = steady_clock::now();
-           // duration5 = duration_cast<microseconds>(end5 - start5);
-           // std::cout << "第i = " << i <<"searchKNN的耗时："<< duration5.count() << " microseconds\n";
-			for (auto j : res) {
-                if(store.get(j.first) != j.second) {
+
+        //phase2
+        // steady_clock::time_point start5;
+        // steady_clock::time_point end5;
+        // microseconds duration5;
+        // start5 = steady_clock::now();
+		// for (i = 0; i < max; ++i) {
+		// 	auto res = store.search_knn(test_text[i], k);
+        //    std::cout << "第i = " << i <<"searchKNN的耗时："<< duration5.count() << " microseconds\n";
+		// 	for (auto j : res) {
+        //         if(store.get(j.first) != j.second) {
+        //             std::cerr << "TEST Error @" << __FILE__ << ":" << __LINE__;
+        //             std::cerr << ", expected " << ans[idx];
+        //             std::cerr << ", got " << j.second << std::endl;
+        //         }
+		// 		EXPECT(ans[idx], j.second);
+		// 		idx++;
+		// 	}
+		// }
+        // end5 = steady_clock::now();
+        // duration5 = duration_cast<microseconds>(end5 - start5);
+
+        // // printf("phase2 search time: %f\n",duration5);
+        // std::cout << "search_knn PHASE1 Elapsed time: " << duration5.count() << " microseconds\n";
+
+
+
+        // steady_clock::time_point start6;
+        // steady_clock::time_point end6;
+        // microseconds duration6;
+        // start6 = steady_clock::now();
+		// for (i = 0; i < max; ++i) {
+		// 	auto res = store.search_knn_hnsw(test_text[i], k);
+        //    // std::cout << "第i = " << i <<"searchKNN的耗时："<< duration5.count() << " microseconds\n";
+		// 	for (auto j : res) {
+        //         if(store.get(j.first) != j.second) {
+        //             std::cerr << "TEST Error @" << __FILE__ << ":" << __LINE__;
+        //             std::cerr << ", expected " << ans[idx];
+        //             std::cerr << ", got " << j.second << std::endl;
+        //         }
+		// 		EXPECT(ans[idx], j.second);
+		// 		idx++;
+		// 	}
+		// }
+        // end6 = steady_clock::now();
+        // duration6 = duration_cast<microseconds>(end6 - start6);
+        // // printf("phase3 search time: %f\n",duration6);
+        // std::cout << "search_knn_HNSW PHASE1 Elapsed time: " << duration6.count() << " microseconds\n";
+        
+        
+
+
+        milliseconds total_time(0); 
+        for (i = 0; i < max; ++i) {
+        
+            // auto res = store.search_knn_hnsw(test_text[i], k);
+        
+            std::vector<float> embStr = embedding_single(test_text[i]);
+            // std::vector<std::pair<std::uint64_t, std::string>> result;
+            auto start = high_resolution_clock::now();
+            auto res = store.hnsw_index.query(embStr, k);
+            for(int i = 0; i < res.size(); i++)
+            {
+                res[i].second = store.get(res[i].first);
+                if(res[i].second == DEL)
+                    res[i].second = "";
+            }
+            auto end = high_resolution_clock::now();
+            total_time += duration_cast<milliseconds>(end - start);  // 累加耗时
+        
+            for (auto j : res) {
+                if (store.get(j.first) != j.second) {
                     std::cerr << "TEST Error @" << __FILE__ << ":" << __LINE__;
                     std::cerr << ", expected " << ans[idx];
                     std::cerr << ", got " << j.second << std::endl;
                 }
-				EXPECT(ans[idx], j.second);
-				idx++;
-			}
-		}
-       // steady_clock::time_point end3 = steady_clock::now();
+                EXPECT(ans[idx], j.second);
+                idx++;
+            }
+        }
+        std::cout << "search_knn_HNSW Elapsed time:" << total_time.count() << " ms" << std::endl;
+        milliseconds total_time0(0); 
+        for (i = 0; i < max; ++i) {
+        
+            // auto res = store.search_knn_hnsw(test_text[i], k);
+        
+            std::vector<float> embStr = embedding_single(test_text[i]);
+            // std::vector<std::pair<std::uint64_t, std::string>> result;
+            auto start = high_resolution_clock::now();
+            auto res = store.query_knn(embStr, k);
+            auto end = high_resolution_clock::now();
+            total_time0 += duration_cast<milliseconds>(end - start);  // 累加耗时
+        
+            for (auto j : res) {
+                if (store.get(j.first) != j.second) {
+                    std::cerr << "TEST Error @" << __FILE__ << ":" << __LINE__;
+                    std::cerr << ", expected " << ans[idx];
+                    std::cerr << ", got " << j.second << std::endl;
+                }
+                EXPECT(ans[idx], j.second);
+                idx++;
+            }
+        }
+        std::cout << "search_knn Elapsed time:" << total_time0.count() << " ms" << std::endl;
+
+       // steady_clock::time_point end3 = steady_clock::now();s
         //microseconds duration3 = duration_cast<microseconds>(end3 - start3);
         //std::cout << "search_knn_hnsw PHASE1 Elapsed time: " << duration3.count() << " microseconds\n";
 
@@ -150,6 +237,7 @@ public:
 
 int main(int argc, char *argv[]) {
     bool verbose = (argc == 2 && std::string(argv[1]) == "-v");
+    freopen("/dev/null", "w", stderr); // 屏蔽所有 stderr 输出  好用哈哈哈
 
     std::cout << "Usage: " << argv[0] << " [-v]" << std::endl;
     std::cout << "  -v: print extra info for failed tests [currently ";

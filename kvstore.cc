@@ -622,12 +622,9 @@ float KVStore::vector_norm(std::vector<float>a)
     }
     return std::sqrt(sum);
 }
-
-std::vector<std::pair<std::uint64_t, std::string>> KVStore::search_knn(std::string query, int k) {
-    std::vector<float> embStr = embedding_single(query);
+std::vector<std::pair<std::uint64_t, std::string>> KVStore::query_knn(std::vector<float> embStr,int k)
+{
     std::vector<std::pair<std::uint64_t, std::string>> result;
-    
-    // 定义小顶堆比较函数
     auto cmp = [](const auto& a, const auto& b) { return a.first > b.first; };
     using SimilarityPair = std::pair<float, std::pair<uint64_t, std::string>>;
     std::priority_queue<SimilarityPair, std::vector<SimilarityPair>, decltype(cmp)> top_k(cmp);
@@ -651,10 +648,19 @@ std::vector<std::pair<std::uint64_t, std::string>> KVStore::search_knn(std::stri
     return result;
 }
 
+
+std::vector<std::pair<std::uint64_t, std::string>> KVStore::search_knn(std::string query, int k) {
+    std::vector<float> embStr = embedding_single(query);
+    
+    std::vector<std::pair<std::uint64_t, std::string>> result = query_knn(embStr,k);
+    return result;
+}
+
 std::vector<std::pair<std::uint64_t, std::string>> KVStore::search_knn_hnsw(std::string query, int k)
 {
     std::vector<float> embStr = embedding_single(query);
     std::vector<std::pair<std::uint64_t, std::string>> result;
+    
     result = hnsw_index.query(embStr, k);
     for(int i = 0; i < result.size(); i++)
     {
