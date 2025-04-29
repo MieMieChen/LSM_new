@@ -6,9 +6,9 @@
 /cmake_install.cmake
 /Makefile
 .specstory/
-/model
-/third_party
-
+/model/
+/third_party/
+/performance_charts/
 # Ignore executables and libraries
 *.exe
 *.out
