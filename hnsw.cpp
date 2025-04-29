@@ -7,55 +7,55 @@
 #include <string>
 
 uint64_t HNSW::get_max_layer() const {
-    return cur_layer;
+    return globalHeader.max_level;
 }
 
 int HNSW::rand_level() {
     int level = 0;
-    while (level < M_max && ((double)rand() / RAND_MAX) < 1.0 / M) {
+    while (level <globalHeader.M_max && ((double)rand() / RAND_MAX) < 1.0 / globalHeader.M) {
         level++;
     }
     return level;
 }
-float  HNSW::cosine_similarity(std::vector<float> a,std::vector<float> b)
-{
+
+float HNSW::cosine_similarity(std::vector<float> a, std::vector<float> b) {
     float result = 0.0f;
-    result = dot_product(a,b)/(vector_norm(a)*vector_norm(b));
+    result = dot_product(a, b) / (vector_norm(a) * vector_norm(b));
     return result;
 }
-float HNSW::dot_product(std::vector<float>a,std::vector<float>b)
-{
+
+float HNSW::dot_product(std::vector<float> a, std::vector<float> b) {
     float result = 0.0f;
-    for(size_t i = 0;i<a.size();i++)
-    {
-        result +=a[i]*b[i];
+    for(size_t i = 0; i < a.size(); i++) {
+        result += a[i] * b[i];
     }
     return result;
 }
-float HNSW::vector_norm(std::vector<float>a)
-{
+
+float HNSW::vector_norm(std::vector<float> a) {
     float sum = 0.0f;
-    for(float x:a)
-    {
-        sum+=x*x;
+    for(float x : a) {
+        sum += x * x;
     }
     return std::sqrt(sum);
 }
 
-
 void HNSW::insert(uint64_t key, const std::vector<float>& vector) {
-    // 存储节点的向量
-    vectors[key] = vector;
+    // 分配新的节点ID
+    uint64_t node_id = next_node_id++;
+    int layer = rand_level();
+    
+    // 创建新节点
+    Node node(key, node_id, vector, layer);
+    nodes[key] = node;
     
     // 确保layers至少有一层
     if(layers.empty()) {
         layers.resize(1);
     }
     
-    int layer = rand_level();
     int entry_points = get_entry_point();
-    if(entry_points == -1)
-    {
+    if(entry_points == -1) {
         entry_point = key;
         layer = 0;
         // 确保第0层存在
@@ -63,30 +63,29 @@ void HNSW::insert(uint64_t key, const std::vector<float>& vector) {
             layers.resize(1);
         }
         layers[0][key] = {};
-        cur_layer = 0;
+        globalHeader.max_level = 0;
         return;
-    }
-    else
-    {
-        if(layer > cur_layer)
-            cur_layer = layer;
+    } else {
+        if(layer > globalHeader.max_level) {
+            globalHeader.max_level = layer;
+        }
     }
     
     // 确保layers的大小足够包含所有层
-    if(layers.size() <= cur_layer) {
-        layers.resize(cur_layer + 1);
+    if(layers.size() <= globalHeader.max_level) {
+        layers.resize(globalHeader.max_level + 1);
     }
     
     // 第一步：自顶层向下逐层搜索，找到每层与q最接近的节点作为下一层的入口点
     uint64_t curr_entry_point = entry_point;
-    for(int i = cur_layer;i>layer;i--)
-   {
-    float best_dist = -1.0f;
-    uint64_t best_node = curr_entry_point;
-    std::list<uint64_t> visited;
-    std::list<uint64_t> candidates;
-    candidates.push_back(curr_entry_point);
-    visited.push_back(curr_entry_point);
+    for(int i = globalHeader.max_level; i > layer; i--) {
+        float best_dist = -1.0f;
+        uint64_t best_node = curr_entry_point;
+        std::list<uint64_t> visited;
+        std::list<uint64_t> candidates;
+        candidates.push_back(curr_entry_point);
+        visited.push_back(curr_entry_point);
+        
         while(!candidates.empty()) {
             uint64_t current = candidates.front();
             candidates.pop_front();
@@ -97,7 +96,7 @@ void HNSW::insert(uint64_t key, const std::vector<float>& vector) {
                 if(std::find(visited.begin(), visited.end(), neighbor) == visited.end()) {
                     visited.push_back(neighbor);
                     candidates.push_back(neighbor);
-                    float dist = cosine_similarity(vector, vectors[neighbor]);
+                    float dist = cosine_similarity(vector, nodes[neighbor].vector);
                     if(dist > best_dist) {
                         best_dist = dist;
                         best_node = neighbor;
@@ -121,12 +120,11 @@ void HNSW::insert(uint64_t key, const std::vector<float>& vector) {
         visited.push_back(curr_entry_point);
         
         // 计算与入口点的相似度
-        float sim = cosine_similarity(vector, vectors[curr_entry_point]);
+        float sim = cosine_similarity(vector, nodes[curr_entry_point].vector);
         neighbors.push_back({sim, curr_entry_point});
         
         // 贪心搜索过程
         while(!candidates.empty()) {
-            // 取出当前候选节点
             uint64_t current = candidates.front();
             candidates.pop_front();
             if(layers[i].find(current) == layers[i].end()) {
@@ -136,34 +134,42 @@ void HNSW::insert(uint64_t key, const std::vector<float>& vector) {
             for(uint64_t neighbor : layers[i][current]) {
                 if(std::find(visited.begin(), visited.end(), neighbor) == visited.end()) {
                     visited.push_back(neighbor);
-                    float dist = cosine_similarity(vector, vectors[neighbor]);
+                    float dist = cosine_similarity(vector, nodes[neighbor].vector);
                     neighbors.push_back({dist, neighbor});
                     candidates.push_back(neighbor);
                 }
             }
         }
+        
         std::sort(neighbors.begin(), neighbors.end(), [](const auto& a, const auto& b) {
             return a.first > b.first; // 相似度降序
         });
-        int num_edges = std::min(M, static_cast<int>(neighbors.size()));
+        
+        int num_edges = std::min(globalHeader.M, static_cast<uint32_t>(neighbors.size()));
         for(int j = 0; j < num_edges; j++) {
-            uint64_t neighbor_id = neighbors[j].second;
-            layers[i][key].push_back(neighbor_id);
-            layers[i][neighbor_id].push_back(key);
-            if(layers[i][neighbor_id].size() > M_max) {
+            uint64_t neighbor_key = neighbors[j].second;
+            layers[i][key].push_back(neighbor_key);
+            layers[i][neighbor_key].push_back(key);
+            
+            // 更新节点的连接关系
+            nodes[key].layer_connections[i].push_back(neighbor_key);
+            nodes[neighbor_key].layer_connections[i].push_back(key);
+            
+            if(layers[i][neighbor_key].size() > globalHeader.M_max) {
                 std::vector<std::pair<float, uint64_t>> neighbor_edges;
-                for(uint64_t edge : layers[i][neighbor_id]) {
-                    float edge_sim = cosine_similarity(vectors[neighbor_id], vectors[edge]);
+                for(uint64_t edge : layers[i][neighbor_key]) {
+                    float edge_sim = cosine_similarity(nodes[neighbor_key].vector, nodes[edge].vector);
                     neighbor_edges.push_back({edge_sim, edge});
                 }
                 std::sort(neighbor_edges.begin(), neighbor_edges.end(), [](const auto& a, const auto& b) {
                     return a.first > b.first;
                 });
-               std::vector<uint64_t> new_edges;
-                for(int k = 0; k < M_max; k++) {
+                std::vector<uint64_t> new_edges;
+                for(int k = 0; k < globalHeader.M_max; k++) {
                     new_edges.push_back(neighbor_edges[k].second);
                 }
-                layers[i][neighbor_id] = new_edges;
+                layers[i][neighbor_key] = new_edges;
+                nodes[neighbor_key].layer_connections[i] = new_edges;
             }
         }
         if(!neighbors.empty()) {
@@ -171,8 +177,48 @@ void HNSW::insert(uint64_t key, const std::vector<float>& vector) {
         }
     }
 }
-uint64_t HNSW::get_entry_point() const
-{
+
+// void HNSW::remove(uint64_t key) {
+//     // 检查key是否存在
+//     if (nodes.find(key) == nodes.end()) {
+//         return;  // key不存在，直接返回
+//     }
+
+//     // 从所有层中删除该节点
+//     for (auto& layer : layers) {
+//         // 删除该节点的所有出边
+//         layer.erase(key);
+
+//         // 删除指向该节点的所有入边
+//         for (auto& [neighbor_key, neighbor_edges] : layer) {
+//             auto it = std::find(neighbor_edges.begin(), neighbor_edges.end(), key);
+//             if (it != neighbor_edges.end()) {
+//                 neighbor_edges.erase(it);
+//                 // 更新邻居节点的连接关系
+//                 nodes[neighbor_key].layer_connections[&layer - &layers[0]].erase(
+//                     std::find(nodes[neighbor_key].layer_connections[&layer - &layers[0]].begin(),
+//                              nodes[neighbor_key].layer_connections[&layer - &layers[0]].end(),
+//                              key)
+//                 );
+//             }
+//         }
+//     }
+
+//     // 如果是入口点，需要更新入口点
+//     if (entry_point == key) {
+//         // 找到第0层的任意其他节点作为新的入口点
+//         if (!layers[0].empty()) {
+//             entry_point = layers[0].begin()->first;
+//         } else {
+//             entry_point = -1;  // 如果没有其他节点，重置入口点
+//         }
+//     }
+
+//     // 删除节点
+//     nodes.erase(key);
+// }
+
+uint64_t HNSW::get_entry_point() const {
     return entry_point;
 }
 
@@ -197,7 +243,7 @@ std::vector<std::pair<std::uint64_t, std::string>> HNSW::query(const std::vector
     uint64_t curr_entry_point = entry_point;
     
     // 从最高层开始向下搜索
-    for(int i = cur_layer; i > 0; i--) {
+    for(int i = globalHeader.max_level; i > 0; i--) {
         float best_dist = -1.0f;
         uint64_t best_node = curr_entry_point;
         
@@ -220,14 +266,14 @@ std::vector<std::pair<std::uint64_t, std::string>> HNSW::query(const std::vector
                     float dist = cosine_similarity(query_vector, vectors[neighbor]);
                     visited.push_back(neighbor);
                     candidates.push_back(node(neighbor,dist));
-                    if(candidates.size() > efConstruction) {
+                    if(candidates.size() > globalHeader.efConstruction) {
                         // 对list排序，按照dist降序（相似度越高越好）
                         candidates.sort([](const node& a, const node& b) {
                             return a.dist > b.dist; // 按相似度降序排列
                         });
                         // 保留前efConstruction个元素，删除其余元素
                         auto it = candidates.begin();
-                        std::advance(it, efConstruction); // 移动到第efConstruction个元素位置
+                        std::advance(it, globalHeader.efConstruction); // 移动到第efConstruction个元素位置
                         candidates.erase(it, candidates.end()); // 删除从it到末尾的所有元素
                     }
                     if( dist > best_dist) {
@@ -253,7 +299,7 @@ std::vector<std::pair<std::uint64_t, std::string>> HNSW::query(const std::vector
     top_candidates.push_back({initial_sim, curr_entry_point});
     
     // 使用更大的efSearch参数来提高搜索精度（通常efSearch > efConstruction）
-    int efSearch = std::max(efConstruction, k);
+    int efSearch = std::max(globalHeader.efConstruction, (uint32_t)k);
     
     while(!candidates.empty()) {
         // 取出当前候选节点（相似度最高的）

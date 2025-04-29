@@ -14,7 +14,9 @@
 #include <cmath>
 #include <unordered_set>
 #include <unordered_map>
+#include <filesystem>
 
+namespace fs = std::filesystem;
 static const std::string DEL = "~DELETED~";
 const uint32_t MAXSIZE       = 2 * 1024 * 1024;
 
@@ -45,9 +47,10 @@ struct cmpPoi {
 
 
 
-KVStore::KVStore(const std::string &dir) :
+KVStore::KVStore(const std::string &dir) : hnsw_index (8,16,25,9,(uint32_t)dim),
     KVStoreAPI(dir) // read from sstables
 {
+    
     for (totalLevel = 0;; ++totalLevel) {
         std::string path = dir + "/level-" + std::to_string(totalLevel) + "/";
         std::vector<std::string> files;
@@ -84,7 +87,8 @@ KVStore::~KVStore()
     std::string filename = ss.getFilename();
     std::cout << "Writing to file: " << filename << std::endl;
     ss.putFile(ss.getFilename().data());
-    compaction(); // 从0层开始尝试合并  c:需要实现
+    //cache落入磁盘
+    compaction(); 
 }
 
 /**
@@ -94,10 +98,9 @@ KVStore::~KVStore()
 void KVStore::put(uint64_t key, const std::string &val) {
     std::vector<float> embeddingString = embedding_single(val);
     Cache[key]= embeddingString;
-
+    dirty_keys.insert(key);
     hnsw_index.insert(key, embeddingString);
 
-    
     uint32_t nxtsize = s->getBytes();
     std::string res  = s->search(key);
     if (!res.length()) { // new add
@@ -119,6 +122,7 @@ void KVStore::put(uint64_t key, const std::string &val) {
         }
         addsstable(ss, 0);      // 加入缓存
         ss.putFile(url.data()); // 加入磁盘
+        //这里可以写一下cache
         compaction();
         s->insert(key, val);
     }
@@ -179,7 +183,10 @@ std::string KVStore::get(uint64_t key) //
  * Returns false iff the key is not found.
  */
 bool KVStore::del(uint64_t key) {
-    Cache.erase(key);
+    std::vector<float> embeddingString = Cache[key];
+    deleted_nodes.push_back(embeddingString);
+    Cache.erase(key);  // 从内存移除
+    dirty_keys.insert(key);  // 标记为删除
     std::string res = get(key);
     if (!res.length())
         return false; // not exist
@@ -671,3 +678,276 @@ std::vector<std::pair<std::uint64_t, std::string>> KVStore::search_knn_hnsw(std:
     return result;
 
 }
+//注意 这个传入的参数是什么！！
+void KVStore::load_embedding_from_disk(const std::string &data_root)
+{
+    Cache.clear();
+    FILE* file = fopen((data_root).c_str(), "rb");
+    if(file==NULL)
+    {
+        printf("cannot open a file\n");
+        return;
+    }
+    fread(&dim,sizeof(std::uint64_t),1,file);
+    uint64_t blocksize = 8 + 4*dim;
+    fseek(file, 0, SEEK_END);
+    uint64_t file_size = ftell(file);
+    uint64_t blockNum =(file_size-8)/blocksize;
+    for(int i = blockNum-1;i>=0;i--)
+    {
+        size_t block_start = i*blocksize+8;
+        fseek(file, block_start, SEEK_SET);
+        uint64_t key;
+        fread(&key,sizeof(std::uint64_t),1,file);
+        std::vector<float> embedding(dim);
+        fread(embedding.data(),sizeof(float),dim,file);
+        bool is_deleted = true;
+        for (float val : embedding) {
+            if (val != std::numeric_limits<float>::max()) {
+                is_deleted = false;
+                break;
+            }
+        }
+        if(!is_deleted&&!Cache.count(key))
+        { 
+            Cache[key] = embedding;
+        }
+        else if(is_deleted&&Cache.count(key))
+        {
+            Cache.erase(key);
+        } 
+    }
+    fclose(file);
+}
+
+
+void KVStore::save_hnsw_index_to_disk(const std::string &hnsw_data_root)
+{
+    if (!utils::dirExists(hnsw_data_root)) {
+        utils::mkdir(hnsw_data_root.data());
+    }
+    std::string file_path1 = hnsw_data_root + "/global_header.bin";
+    std::string file_path2 = hnsw_data_root + "/deleted_notes.bin";
+    FILE* file1 = fopen(file_path1.c_str(), "wb");
+    FILE* file2 = fopen(file_path2.c_str(), "wb");
+    if(file1==NULL||file2==NULL)
+    {
+        printf("cannot open a file\n");
+        return;
+    }
+    fwrite(&hnsw_index.globalHeader.M,sizeof(uint32_t),1,file1);
+    fwrite(&hnsw_index.globalHeader.M_max,sizeof(uint32_t),1,file1);
+    fwrite(&hnsw_index.globalHeader.efConstruction,sizeof(uint32_t),1,file1);
+    fwrite(&hnsw_index.globalHeader.m_L,sizeof(uint32_t),1,file1);
+    fwrite(&hnsw_index.globalHeader.max_level,sizeof(uint64_t),1,file1);
+    fwrite(&hnsw_index.globalHeader.num_nodes,sizeof(uint64_t),1,file1);
+    fwrite(&hnsw_index.globalHeader.dim,sizeof(uint64_t),1,file1);
+    fclose(file1);
+    std::cout << "save global header successfully!" << std::endl;
+    uint64_t deleted_size = deleted_nodes.size();
+    for(int i = 0;i<deleted_size;i++)
+    {
+        fwrite(deleted_nodes[i].data(),sizeof(float),dim,file2);
+    }
+    fclose(file2);
+    if (!utils::dirExists(hnsw_data_root + "/nodes")) {
+        utils::mkdir((hnsw_data_root + "/nodes").data());
+    }
+    for(auto it : hnsw_index.nodes)
+    {
+        std::string file_root_path = hnsw_data_root + "/nodes/" + std::to_string(it.second.id) + "/";
+        if (!utils::dirExists(file_root_path)) {
+            utils::mkdir((file_root_path).c_str());
+        }
+        uint32_t max_level = it.second.max_level;
+        uint64_t key_of_embedding_vector = it.first;
+        std::string header_path = file_root_path + "header.bin";
+        FILE* file = fopen(header_path.c_str(), "wb");
+        if(file==NULL)
+        {
+            printf("cannot open a file\n");
+            return;
+        }
+        fwrite(&max_level,sizeof(uint32_t),1,file);
+        fwrite(&key_of_embedding_vector,sizeof(uint64_t),1,file);
+        fclose(file);
+        std::string edges_root_path = file_root_path + "edges/";
+        if (!utils::dirExists(edges_root_path)) {
+            utils::mkdir((edges_root_path).c_str());
+        }
+        for(int i = it.second.layer_connections.size()-1;i>=0;i--)
+        {
+            std::string edges_path = edges_root_path + std::to_string(i) + ".bin";
+            FILE* file = fopen(edges_path.c_str(), "wb");
+            if(file==NULL)
+            {
+                printf("cannot open a file\n");
+                return;
+            }
+            uint32_t num_edges = it.second.layer_connections[i].size();
+            fwrite(&num_edges,sizeof(uint32_t),1,file);
+            for(auto it2 : it.second.layer_connections[i])
+            {
+                fwrite(&it2,sizeof(uint32_t),1,file);
+            }
+            fclose(file);
+        }
+    }
+
+}
+void KVStore::load_hnsw_index_from_disk(const std::string &hnsw_data_root)
+{
+    hnsw_index.nodes.clear();
+    hnsw_index.layers.clear();
+    std::string file_path1 = hnsw_data_root + "/global_header.bin";
+    std::string file_path2 = hnsw_data_root + "/deleted_notes.bin";
+    FILE* file1 = fopen(file_path1.c_str(), "rb");
+    FILE* file2 = fopen(file_path2.c_str(), "rb");
+    if(file1==NULL||file2==NULL)
+    {
+        printf("cannot open a file\n");
+        return;
+    }
+    fread(&hnsw_index.globalHeader.M,sizeof(uint32_t),1,file1);
+    fread(&hnsw_index.globalHeader.M_max,sizeof(uint32_t),1,file1);
+    fread(&hnsw_index.globalHeader.efConstruction,sizeof(uint32_t),1,file1);
+    fread(&hnsw_index.globalHeader.m_L,sizeof(uint32_t),1,file1);
+    fread(&hnsw_index.globalHeader.max_level,sizeof(uint64_t),1,file1);
+    fread(&hnsw_index.globalHeader.num_nodes,sizeof(uint64_t),1,file1);
+    fread(&hnsw_index.globalHeader.dim,sizeof(uint64_t),1,file1);
+    fclose(file1);
+    std::cout << "load global header successfully!" << std::endl;
+    fseek(file2, 0, SEEK_END);
+    uint64_t file_size = ftell(file2);
+    uint64_t blocksize = 4*dim;
+    uint64_t blockNum =(file_size)/blocksize;
+    for(int i = 0;i<blockNum;i++)
+    {
+        std::vector<float> deleted(dim);
+        fread(deleted.data(),sizeof(float),dim,file2);
+        deleted_nodes.push_back(deleted);
+    }
+    fclose(file2);
+    std::cout << "load deleted nodes successfully!" << std::endl;
+    std::vector<std::string> files;
+    std::string nodes_path = hnsw_data_root + "/nodes/";
+    int size = utils::scanDir(nodes_path,files);
+    for(int i = 0;i<size;i++)
+    {
+        std::string file_path = nodes_path + files[i];
+        std::vector<std::string> files2;
+        int size2 = utils::scanDir(file_path,files2);
+        for(int j = 0;j<size2;j++)
+        {
+            std::string file_path2 = file_path + "/" + files2[j];
+            if(isPathOfLevel(file_path2,hnsw_index.globalHeader.max_level))
+            {
+                uint32_t max_level;
+                uint64_t key_of_embedding_vector;
+                FILE* file = fopen(file_path2.c_str(), "rb");
+                if(file==NULL)
+                {
+                    printf("cannot open a file\n");
+                    return;
+                }
+                fread(&max_level,sizeof(uint32_t),1,file);
+                fread(&key_of_embedding_vector,sizeof(uint64_t),1,file);
+                hnsw_index.nodes[key_of_embedding_vector].id = key_of_embedding_vector;
+                hnsw_index.nodes[key_of_embedding_vector].max_level = max_level;
+                fclose(file);
+            }
+            else
+            {
+                uint32_t max_level;
+                uint64_t key_of_embedding_vector;
+                FILE* file = fopen(file_path2.c_str(), "rb");
+                if(file==NULL)
+                {
+                    printf("cannot open a file\n");
+                    return;
+                }
+                fread(&max_level,sizeof(uint32_t),1,file);
+                fread(&key_of_embedding_vector,sizeof(uint64_t),1,file);
+                hnsw_index.nodes[key_of_embedding_vector].id = key_of_embedding_vector;
+                hnsw_index.nodes[key_of_embedding_vector].max_level = max_level;
+                
+                std::string edges_root_path = file_path + "/edges/";
+                int num_edges;
+                
+                for(int k = 0;k<=max_level;k++)
+                {
+                    std::string edges_path = edges_root_path + std::to_string(k) + ".bin";
+                    FILE* file3 = fopen(edges_path.c_str(), "rb");
+                    if(file3==NULL)
+                    {
+                        printf("cannot open a file\n");
+                        return;
+                    }
+                    fread(&num_edges,sizeof(uint32_t),1,file3);
+                    std::vector<uint32_t> edges(num_edges);
+                    fread(edges.data(),sizeof(uint32_t),num_edges,file3);
+                    hnsw_index.nodes[key_of_embedding_vector].layer_connections[k] = edges;
+                    fclose(file3);
+                }
+            }
+        }
+    }
+
+             
+}
+void KVStore::save_embedding_to_disk(const std::string &data_root)
+{
+    if (!utils::dirExists(data_root)) {
+        utils::mkdir(data_root.data());
+    }
+    std::string file_path = data_root + "/embedding.bin";
+    bool is_initialized = fs::exists(file_path) && fs::file_size(file_path) > 0;
+    if (is_initialized) {
+        std::cout << "Embedding file already exists. appending..." << std::endl;
+        FILE* file = fopen((file_path).c_str(), "ab");
+        if(file==NULL)
+        {
+            printf("cannot open a file\n");
+            return;
+        }
+        for(auto it:dirty_keys)
+        {
+            fwrite(&it,sizeof(std::uint64_t),1,file);
+            if(Cache.count(it))
+            {
+                fwrite(Cache[it].data(),sizeof(float),dim,file);
+            }
+            else
+            {
+                std::vector<float> deleted(dim, std::numeric_limits<float>::max());
+                fwrite(deleted.data(), sizeof(float), dim, file);
+            }
+        }
+        dirty_keys.clear();
+        fclose(file);
+        std::cout << "save embedding to disk successfully!" << std::endl;
+    }    
+    else
+    {
+        std::cout << "Creating new embedding file..." << std::endl;
+        FILE* file = fopen((file_path).c_str(), "wb");
+        if(file==NULL)
+        {
+            printf("cannot open a file\n");
+            return;
+        }
+        fwrite(&dim,sizeof(std::uint64_t),1,file);
+        for(auto it:Cache)
+        {
+            fwrite(&it.first,sizeof(std::uint64_t),1,file);
+            fwrite(it.second.data(),sizeof(float),dim,file);
+        }
+        dirty_keys.clear();
+        fclose(file);
+        std::cout << "save embedding to disk successfully!" << std::endl;
+    }
+    
+   
+}
+
+
