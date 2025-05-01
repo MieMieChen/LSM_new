@@ -15,12 +15,12 @@
 
 struct Node {
     uint64_t key;  // 节点的键
-    uint64_t id;   // 节点的ID
-    std::vector<float> vector;  // 节点的向量
+    uint32_t id;   // 节点的ID
+    std::vector<float> vector;  // 节点的向量  存向量还是embedding
     std::vector<std::vector<uint64_t>> layer_connections;  // 每层的连接关系
     int max_level;  // 节点所在的最高层
-
-    Node(uint64_t k, uint64_t i, const std::vector<float>& v, int level) 
+    Node() = default;   
+    Node(uint64_t k, uint32_t i, const std::vector<float>& v, int level) 
         : key(k), id(i), vector(v), max_level(level) {
         layer_connections.resize(level + 1);
     }
@@ -41,6 +41,7 @@ class HNSW {
             globalHeader.dim = dim;
             next_node_id = 0;  // 初始化节点ID计数器
         }
+        HNSW() = default;
         void insert(uint64_t key, const std::vector<float>& vector);
         uint64_t get_max_layer() const;
         uint64_t get_entry_point() const;
