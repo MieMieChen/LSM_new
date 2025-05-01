@@ -150,6 +150,7 @@ void HNSW::insert(uint64_t key, const std::vector<float>& vector) {
             uint64_t neighbor_key = neighbors[j].second;
             layers[i][key].push_back(neighbor_key);
             layers[i][neighbor_key].push_back(key);
+            //layers当中村的
             
             // 更新节点的连接关系
             nodes[key].layer_connections[i].push_back(neighbor_key);

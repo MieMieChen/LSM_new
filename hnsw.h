@@ -57,7 +57,7 @@ class HNSW {
         } globalHeader;       
         std::unordered_map<uint64_t, uint64_t> key_to_id;  // 键值到节点ID的映射
         std::unordered_map<uint64_t, uint64_t> id_to_key;  // 节点ID到键值的映射
-        std::unordered_map<uint64_t, Node> nodes;  // 存储所有节点
+        std::unordered_map<uint64_t, Node> nodes;
     private:
         std::unordered_map<uint64_t, std::vector<float>> vectors; // 存储每个节点的向量
         uint64_t next_node_id=0; // 下一个可用的节点ID
