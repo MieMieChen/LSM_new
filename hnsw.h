@@ -15,7 +15,7 @@
 
 struct Node {
     uint64_t key;  // 节点的键
-    uint32_t id;   // 节点的ID
+    uint64_t id;   // 节点的ID
     std::vector<float> vector;  // 节点的向量  存向量还是embedding
     std::vector<std::vector<uint64_t>> layer_connections;  // 每层的连接关系
     bool is_deleted = false; // 节点是否被删除
@@ -59,7 +59,8 @@ class HNSW {
         } globalHeader;       
         std::unordered_map<uint64_t, uint64_t> key_to_id;  // 键值到节点ID的映射
         std::unordered_map<uint64_t, uint64_t> id_to_key;  // 节点ID到键值的映射
-        std::unordered_map<uint64_t, Node> nodes;
+        std::vector<Node> nodes;
+        void set_entry_point(uint64_t id);
     private:
         // std::unordered_map<uint64_t, std::vector<float>> vectors; // 存储每个节点的向量
         uint64_t next_node_id=0; // 下一个可用的节点ID

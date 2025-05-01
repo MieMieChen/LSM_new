@@ -190,9 +190,16 @@ std::string KVStore::get(uint64_t key) //
  * Returns false iff the key is not found.
  */
 bool KVStore::del(uint64_t key) {
-    std::vector<float> embeddingString = Cache[key];
-    hnsw_index.nodes[key].is_deleted = true; // 标记为删除 但是不修改vector？保证之后还是能够用来计算的？
-    deleted_nodes.push_back(DeletedNode(key, embeddingString));
+    std::vector<float> embeddingString;
+    uint64_t id;
+    for(auto &it:hnsw_index.nodes) {
+        if(it.key == key) {
+            it.is_deleted = true; // 标记为删除
+            id = it.id;
+            embeddingString = it.vector; // 获取对应的向量
+        }
+    }
+    deleted_nodes.push_back(DeletedNode(id, embeddingString));
     //是在落入磁盘的时候判断内存中是否还有这个key对应的向量 然后来判断是修改了还是删除，
     Cache.erase(key);  // 从内存移除
     dirty_keys.insert(key);  // 标记为删除
@@ -216,10 +223,6 @@ void KVStore::reset() {
         for (int i = 0; i < size; ++i) {
             std::string file = path + "/" + files[i];
             int ret = utils::rmfile(file.data());
-            // if(ret!=0)
-            // {
-            //     std::cout << "erroe!";
-            // }
         }
         utils::rmdir(path.data());
         sstableIndex[level].clear();
@@ -752,25 +755,24 @@ void KVStore::save_hnsw_index_to_disk(const std::string &hnsw_data_root)
     uint64_t deleted_size = deleted_nodes.size();
     for(int i = 0;i<deleted_size;i++)
     {
-        fwrite(&deleted_nodes[i].key,sizeof(uint64_t),1,file2);
+        fwrite(&deleted_nodes[i].id,sizeof(uint64_t),1,file2);
         fwrite(deleted_nodes[i].vector.data(),sizeof(float),dim,file2);
     }
     fclose(file2);
     if (!utils::dirExists(hnsw_data_root + "/nodes")) {
         utils::mkdir((hnsw_data_root + "/nodes").data());
     }
-    uint64_t id = 0;
     hnsw_index.globalHeader.num_nodes = 0;
     //id是为了让其看起来更加正解
     for(auto it : hnsw_index.nodes)
     {
         hnsw_index.globalHeader.num_nodes++;
-        std::string file_root_path = hnsw_data_root + "/nodes/" + std::to_string(id++) + "/";
+        std::string file_root_path = hnsw_data_root + "/nodes/" + std::to_string(it.id) + "/";
         if (!utils::dirExists(file_root_path)) {
             utils::mkdir((file_root_path).c_str());
         }
-        uint32_t max_level = it.second.max_level;
-        uint64_t key_of_embedding_vector = it.first;
+        uint32_t max_level = it.max_level;
+        uint64_t key_of_embedding_vector = it.key;
         std::string header_path = file_root_path + "header.bin";
         FILE* file = fopen(header_path.c_str(), "wb");
         if(file==NULL)
@@ -785,7 +787,7 @@ void KVStore::save_hnsw_index_to_disk(const std::string &hnsw_data_root)
         if (!utils::dirExists(edges_root_path)) {
             utils::mkdir((edges_root_path).c_str());
         }
-        for(int i = it.second.layer_connections.size()-1;i>=0;i--)
+        for(int i = it.layer_connections.size()-1;i>=0;i--)
         {
             std::string edges_path = edges_root_path + std::to_string(i) + ".bin";
             FILE* file = fopen(edges_path.c_str(), "wb");
@@ -794,9 +796,9 @@ void KVStore::save_hnsw_index_to_disk(const std::string &hnsw_data_root)
                 printf("cannot open a file\n");
                 return;
             }
-            uint32_t num_edges = it.second.layer_connections[i].size();
+            uint32_t num_edges = it.layer_connections[i].size();
             fwrite(&num_edges,sizeof(uint32_t),1,file);
-            for(auto it2 : it.second.layer_connections[i])
+            for(auto it2 : it.layer_connections[i])
             {
                 fwrite(&it2,sizeof(uint64_t),1,file); //我存的是key而不是id
             }
@@ -845,10 +847,10 @@ void KVStore::load_hnsw_index_from_disk(const std::string &hnsw_data_root)
     for(int i = 0;i<blockNum;i++)
     {
         std::vector<float> deleted(dim);
-        uint64_t key;
-        fread(&key,sizeof(uint64_t),1,file2);
+        uint64_t id;
+        fread(&id,sizeof(uint64_t),1,file2);
         fread(deleted.data(),sizeof(float),dim,file2);
-        deleted_nodes.push_back(DeletedNode(key, deleted));
+        deleted_nodes.push_back(DeletedNode(id, deleted));
     }
     fclose(file2);
     std::cout << "load deleted nodes successfully!" << std::endl;
@@ -868,6 +870,10 @@ void KVStore::load_hnsw_index_from_disk(const std::string &hnsw_data_root)
         Node node;
         fread(&node.max_level,sizeof(uint32_t),1,file);
         fread(&node.key,sizeof(uint64_t),1,file);
+        node.id = i;
+        node.is_deleted = false;
+        node.layer_connections.clear();
+        node.layer_connections.resize(node.max_level);
         vector.resize(hnsw_index.globalHeader.dim);
         node.vector = Cache[node.key];
         std::string edges_root_path = node_path_root + "edges/";
@@ -888,7 +894,7 @@ void KVStore::load_hnsw_index_from_disk(const std::string &hnsw_data_root)
             node.layer_connections.push_back(edges);
             fclose(file2);
         }
-        hnsw_index.nodes[node.key] = node;
+        hnsw_index.nodes[node.id] = node;
     }             
 }
 void KVStore::save_embedding_to_disk(const std::string &data_root)

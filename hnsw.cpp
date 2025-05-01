@@ -42,20 +42,24 @@ float HNSW::vector_norm(std::vector<float> a) {
 
 void HNSW::insert(uint64_t key, const std::vector<float>& vector) {
     // 分配新的节点ID
-    uint64_t node_id = next_node_id++;
     int layer = rand_level();
     // 检查key是否已经存在
-    if (nodes.find(key) != nodes.end()) {
-        nodes[key].is_deleted = false; // 标记为未删除
-        nodes[key].vector = vector; // 更新向量
-        nodes[key].max_level = std::max(nodes[key].max_level, layer); // 更新最大层级
-    }
-    // 创建新节点
-    else
-    { 
-        Node node(key, node_id, vector, layer);
-        nodes[key] = node;
-    }
+    // if (nodes.find(key) != nodes.end()) {
+    //     nodes[key].is_deleted = false; // 标记为未删除
+    //     nodes[key].vector = vector; // 更新向量
+    //     nodes[key].max_level = std::max(nodes[key].max_level, layer); // 更新最大层级
+    // }
+    // // 创建新节点
+    // else
+    // { 
+        Node node(key, 0, vector, layer);
+        nodes.push_back(node);
+        uint64_t node_id = nodes.size() - 1;
+        nodes[node_id].id = node_id; // 设置节点ID
+        // nodes[node_id].layer_connections.resize(layer + 1);
+        // nodes[node_id].is_deleted = false; // 标记为未删除
+
+    // }
     
     // 确保layers至少有一层
     if(layers.empty()) {
@@ -63,19 +67,21 @@ void HNSW::insert(uint64_t key, const std::vector<float>& vector) {
     }
     
     int entry_points = get_entry_point();
+
     if(entry_points == -1) {
-        entry_point = key;
+        entry_point = node_id;
         layer = 0;
         // 确保第0层存在
         if(layers.size() == 0) {
             layers.resize(1);
         }
-        layers[0][key] = {};
+        layers[0][node_id] = {};
         globalHeader.max_level = 0;
         return;
     } else {
         if(layer > globalHeader.max_level) {
             globalHeader.max_level = layer;
+            set_entry_point(node_id);
         }
     }
     
@@ -118,8 +124,8 @@ void HNSW::insert(uint64_t key, const std::vector<float>& vector) {
     
     // 第二步：从layer层到第0层搜索，在每层将q与最近的efConstruction个点相连
     for(int i = layer; i >= 0; i--) {
-        if(layers[i].find(key) == layers[i].end()) {
-            layers[i][key] = {};
+        if(layers[i].find(node_id) == layers[i].end()) {
+            layers[i][node_id] = {};
         }
         std::vector<std::pair<float, uint64_t>> neighbors; 
         std::list<uint64_t> visited;
@@ -154,19 +160,19 @@ void HNSW::insert(uint64_t key, const std::vector<float>& vector) {
             return a.first > b.first; // 相似度降序
         });
         
-        int num_edges = std::min(globalHeader.M, static_cast<uint32_t>(neighbors.size()));
+        int num_edges = std::min(globalHeader.M, static_cast<uint32_t>(neighbors.size())); //找到离自己近的M个节点
         for(int j = 0; j < num_edges; j++) {
-            uint64_t neighbor_key = neighbors[j].second;
-            layers[i][key].push_back(neighbor_key);
-            layers[i][neighbor_key].push_back(key);
+            uint64_t neighbor_id = neighbors[j].second;
+            layers[i][node_id].push_back(neighbor_id);
+            layers[i][neighbor_id].push_back(node_id);
 
-            nodes[key].layer_connections[i].push_back(neighbor_key);
-            nodes[neighbor_key].layer_connections[i].push_back(key);
+            nodes[node_id].layer_connections[i].push_back(neighbor_id);
+            nodes[neighbor_id].layer_connections[i].push_back(node_id);
             
-            if(layers[i][neighbor_key].size() > globalHeader.M_max) {
+            if(layers[i][neighbor_id].size() > globalHeader.M_max) {
                 std::vector<std::pair<float, uint64_t>> neighbor_edges;
-                for(uint64_t edge : layers[i][neighbor_key]) {
-                    float edge_sim = cosine_similarity(nodes[neighbor_key].vector, nodes[edge].vector);
+                for(uint64_t edge : layers[i][neighbor_id]) {
+                    float edge_sim = cosine_similarity(nodes[neighbor_id].vector, nodes[edge].vector);
                     neighbor_edges.push_back({edge_sim, edge});
                 }
                 std::sort(neighbor_edges.begin(), neighbor_edges.end(), [](const auto& a, const auto& b) {
@@ -176,8 +182,8 @@ void HNSW::insert(uint64_t key, const std::vector<float>& vector) {
                 for(int k = 0; k < globalHeader.M_max; k++) {
                     new_edges.push_back(neighbor_edges[k].second);
                 }
-                layers[i][neighbor_key] = new_edges;
-                nodes[neighbor_key].layer_connections[i] = new_edges;
+                layers[i][neighbor_id] = new_edges;
+                nodes[neighbor_id].layer_connections[i] = new_edges;
             }
         }
         if(!neighbors.empty()) {
@@ -188,6 +194,10 @@ void HNSW::insert(uint64_t key, const std::vector<float>& vector) {
 
 uint64_t HNSW::get_entry_point() const {
     return entry_point;
+}
+
+void HNSW::set_entry_point(uint64_t id) {
+    entry_point = id;
 }
 
 struct node
@@ -301,14 +311,15 @@ std::vector<std::pair<std::uint64_t, std::string>> HNSW::query(const std::vector
                         [](const auto& a, const auto& b) { return a.first > b.first; }); 
 
                         // 为了保证之后能有k个 剪枝的时候要把已经delete的数量计算出来 最后再删除
-                        uint64_t deleted_count = 0;
-                        for(auto it = top_candidates.begin(); it != top_candidates.end(); ++it) {
-                            if(nodes[it->second].is_deleted) {
-                               deleted_count++;
-                            }
-                        }
-                        top_candidates.resize(std::min(globalHeader.efConstruction+deleted_count,top_candidates.size()));
-                }
+                        // uint64_t deleted_count = 0;
+                        // for(auto it = top_candidates.begin(); it != top_candidates.end(); ++it) {
+                        //     if(nodes[it->second].is_deleted) {
+                        //        deleted_count++;
+                        //     }
+                        // }
+                        // top_candidates.resize(std::min(globalHeader.efConstruction+deleted_count,top_candidates.size()));
+                        top_candidates.resize(std::min(globalHeader.efConstruction,(uint32_t)top_candidates.size()));
+                    }
             }
         }
     }

@@ -37,9 +37,9 @@ private:
     std::unordered_set<uint64_t> dirty_keys;  // 需要删除的key
     struct DeletedNode
     {
-        uint64_t key;
+        uint64_t id;
         std::vector<float> vector;
-        DeletedNode(uint64_t k, std::vector<float> v) : key(k), vector(v) {};
+        DeletedNode(uint64_t k, std::vector<float> v) : id(k), vector(v) {};
     };
     std::vector<DeletedNode> deleted_nodes; //存储key
     int totalLevel = -1; // 层数

@@ -585,6 +585,7 @@ void LLMEmbedding::batchDecode(llama_context *ctx, llama_batch &batch,
 
 int embedding_utils(const std::string &prompt, std::vector<float> &embeddings,
                     int &n_embd, int &n_prompts) {
+  common_log_pause(common_log_main());    
   return LLMEmbedding::getInstance().embedding(prompt, embeddings, n_embd,
                                                n_prompts);
 }
