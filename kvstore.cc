@@ -763,6 +763,7 @@ void KVStore::save_hnsw_index_to_disk(const std::string &hnsw_data_root)
         fwrite(deleted_nodes[i].vector.data(),sizeof(float),dim,file2);
     }
     fclose(file2);
+
     if (!utils::dirExists(hnsw_data_root + "/nodes")) {
         utils::mkdir((hnsw_data_root + "/nodes").data());
     }
@@ -860,6 +861,8 @@ void KVStore::load_hnsw_index_from_disk(const std::string &hnsw_data_root)
     std::cout << "load deleted nodes successfully!" << std::endl;
     std::vector<std::string> files;
     std::string nodes_path = hnsw_data_root + "nodes/";
+    hnsw_index.layers.clear();
+    hnsw_index.layers.resize(hnsw_index.globalHeader.max_level+1);
     for(int i = 0;i<hnsw_index.globalHeader.num_nodes;i++)
     {
         std::string node_path_root = nodes_path + std::to_string(i) + "/";
@@ -877,7 +880,7 @@ void KVStore::load_hnsw_index_from_disk(const std::string &hnsw_data_root)
         node.id = i;
         node.is_deleted = false;
         node.layer_connections.clear();
-        node.layer_connections.resize(node.max_level);
+        // node.layer_connections.resize(node.max_level+1);
         vector.resize(hnsw_index.globalHeader.dim);
         node.vector = Cache[node.key];
         std::string edges_root_path = node_path_root + "edges/";
@@ -903,8 +906,14 @@ void KVStore::load_hnsw_index_from_disk(const std::string &hnsw_data_root)
         {
             hnsw_index.nodes.push_back(node);
         }
+
+        for(int i = 0;i<=node.max_level;i++)
+        {
+            hnsw_index.layers[i][node.id] = node.layer_connections[i];
+        }
         fclose(file);
     }   
+    //used to set breakpoints.
     int a = 1;
             
 }

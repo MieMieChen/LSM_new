@@ -57,8 +57,8 @@ class HNSW {
             uint32_t num_nodes;        // 节点总数
             uint32_t dim;              // 向量维度
         } globalHeader;       
-        std::unordered_map<uint64_t, uint64_t> key_to_id;  // 键值到节点ID的映射
-        std::unordered_map<uint64_t, uint64_t> id_to_key;  // 节点ID到键值的映射
+        // std::unordered_map<uint64_t, uint64_t> key_to_id;  // 键值到节点ID的映射
+        // std::unordered_map<uint64_t, uint64_t> id_to_key;  // 节点ID到键值的映射
         std::vector<Node> nodes;
         void set_entry_point(uint64_t id);
     private:

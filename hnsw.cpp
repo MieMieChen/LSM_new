@@ -213,13 +213,18 @@ struct node
 std::vector<std::pair<std::uint64_t, std::string>> HNSW::query(const std::vector<float>& query_vector, int k) {
     std::vector<std::pair<std::uint64_t, std::string>> result;
     
-    if(nodes.empty() || entry_point == -1) {
+    if(nodes.empty()) {
         return result; // 空结果
+    }
+    if( entry_point == -1)
+    {
+        entry_point = layers[globalHeader.max_level-1].begin()->first; // 如果没有入口点，默认使用最高层的第一个节点
     }
     
     // 首先在最高层找到最近的节点
     uint64_t curr_entry_point = entry_point;
-    
+        // uint64_t curr_entry_point = 127;
+
     // 从最高层开始向下搜索
     for(int i = globalHeader.max_level; i > 0; i--) {
         float best_dist = -1.0f;

@@ -27,12 +27,14 @@ int main() {
   KVStore store("data/");
 
   // TODO: uncomment this line when you have implemented the function
-  // store.load_hnsw_index_from_disk("hnsw_data/");
+  store.load_embedding_from_disk("data/");
+  
+  store.load_hnsw_index_from_disk("./hnsw_data_root/");
 
   int pass = 0;
   int total = 128;
 
-  std::vector<std::string> text = load_text("data/trimmed_text.txt");
+  std::vector<std::string> text = load_text("../data/trimmed_text.txt");
   for (int i = 0; i < total; i++) {
     std::vector<std::pair<std::uint64_t, std::string>> result =
         store.search_knn_hnsw(text[i], 3);

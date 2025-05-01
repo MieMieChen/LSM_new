@@ -21,7 +21,7 @@ int main() {
 
   bool pass = true;
 
-  std::vector<std::string> text = load_text("data/trimmed_text.txt");
+  std::vector<std::string> text = load_text("../data/trimmed_text.txt");
 
   std::unordered_map<std::string, std::uint64_t> content_to_id;
 
