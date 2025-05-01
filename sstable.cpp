@@ -12,6 +12,11 @@ const uint32_t MAXSIZE = 2 * 1024 * 1024; // 2MB
 void sstable::putFile(const char *path) { // 将内存中的输出到二进制文件中
     // std::cout << "output path" << path << std::endl;
     FILE *file = fopen(path, "wb");
+    if (file == NULL) {
+        std::cerr << "Failed to open file: " << path << std::endl;
+        std::cerr << "Error: " << strerror(errno) << std::endl;
+        return;
+    }
     fseek(file, 0, SEEK_SET);
     // 4个u64变量
     fwrite(&time, 8, 1, file);
