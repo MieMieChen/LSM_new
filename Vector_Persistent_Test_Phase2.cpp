@@ -17,7 +17,9 @@ int main() {
   KVStore store("data/");
 
   // TODO: uncomment this line when you have implemented the function
-  store.load_embedding_from_disk("embedding_data/");
+  // store.load_embedding_from_disk("embedding_data/"); 
+  store.load_embedding_from_disk("data/");
+
 
   bool pass = true;
 

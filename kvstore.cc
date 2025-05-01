@@ -70,8 +70,8 @@ KVStore::KVStore(const std::string &dir) :hnsw_index(8,16,25,9,dim),
     //需要修改这里的dir。
     // 冷启动（无数据）：使用默认参数创建新 HNSW 索引，并保存初始结构到磁盘。
     // 热启动（有数据）：从磁盘加载现有索引。
-    load_embedding_from_disk(dir);
-    load_hnsw_index_from_disk("hnsw_data_root/");
+    // load_embedding_from_disk(dir);
+    // load_hnsw_index_from_disk("hnsw_data_root/");
 }
 
 // 程序退出时：
@@ -698,10 +698,10 @@ void KVStore::load_embedding_from_disk(const std::string &data_root)
         return;
     }
     std::string file_path = data_root + "/embedding.bin";
-    FILE* file = fopen((data_root).c_str(), "rb");
+    FILE* file = fopen((file_path).c_str(), "rb");
     if(file==NULL)
     {
-        printf("cannot open a file\n");
+        printf("cannot open a file 1\n");
         return;
     }
     fread(&dim,sizeof(std::uint64_t),1,file);
@@ -723,6 +723,10 @@ void KVStore::load_embedding_from_disk(const std::string &data_root)
                 is_deleted = false;
                 break;
             }
+        }
+        if(i>127)
+        {
+            int a = 1;
         }
         if(!is_deleted&&!Cache.count(key))
         { 
@@ -748,7 +752,7 @@ void KVStore::save_hnsw_index_to_disk(const std::string &hnsw_data_root)
     FILE* file2 = fopen(file_path2.c_str(), "wb");
     if(file1==NULL||file2==NULL)
     {
-        printf("cannot open a file\n");
+        printf("cannot open a file 2\n");
         return;
     }
 
@@ -777,7 +781,7 @@ void KVStore::save_hnsw_index_to_disk(const std::string &hnsw_data_root)
         FILE* file = fopen(header_path.c_str(), "wb");
         if(file==NULL)
         {
-            printf("cannot open a file\n");
+            printf("cannot open a file 3\n");
             return;
         }
         fwrite(&max_level,sizeof(uint32_t),1,file);
@@ -793,7 +797,7 @@ void KVStore::save_hnsw_index_to_disk(const std::string &hnsw_data_root)
             FILE* file = fopen(edges_path.c_str(), "wb");
             if(file==NULL)
             {
-                printf("cannot open a file\n");
+                printf("cannot open a file 4\n");
                 return;
             }
             uint32_t num_edges = it.layer_connections[i].size();
@@ -822,13 +826,13 @@ void KVStore::load_hnsw_index_from_disk(const std::string &hnsw_data_root)
     if (!utils::dirExists(hnsw_data_root)) {
         return;
     }
-    std::string file_path1 = hnsw_data_root + "/global_header.bin";
-    std::string file_path2 = hnsw_data_root + "/deleted_notes.bin";
+    std::string file_path1 = hnsw_data_root + "global_header.bin";
+    std::string file_path2 = hnsw_data_root + "deleted_notes.bin";
     FILE* file1 = fopen(file_path1.c_str(), "rb");
     FILE* file2 = fopen(file_path2.c_str(), "rb");
     if(file1==NULL||file2==NULL)
     {
-        printf("cannot open a file\n");
+        printf("cannot open a file 5\n");
         return;
     }
     fread(&hnsw_index.globalHeader.M,sizeof(uint32_t),1,file1);
@@ -855,7 +859,7 @@ void KVStore::load_hnsw_index_from_disk(const std::string &hnsw_data_root)
     fclose(file2);
     std::cout << "load deleted nodes successfully!" << std::endl;
     std::vector<std::string> files;
-    std::string nodes_path = hnsw_data_root + "/nodes/";
+    std::string nodes_path = hnsw_data_root + "nodes/";
     for(int i = 0;i<hnsw_index.globalHeader.num_nodes;i++)
     {
         std::string node_path_root = nodes_path + std::to_string(i) + "/";
@@ -863,7 +867,7 @@ void KVStore::load_hnsw_index_from_disk(const std::string &hnsw_data_root)
         FILE* file = fopen(header_path.c_str(), "rb");
         if(file==NULL)
         {
-            printf("cannot open a file\n");
+            printf("cannot open a file 6\n");
             return;
         }
         std::vector<float> vector;
@@ -877,6 +881,7 @@ void KVStore::load_hnsw_index_from_disk(const std::string &hnsw_data_root)
         vector.resize(hnsw_index.globalHeader.dim);
         node.vector = Cache[node.key];
         std::string edges_root_path = node_path_root + "edges/";
+        files.clear();
         size_t neighbors = utils::scanDir(edges_root_path,files);
         for(int j = 0;j<neighbors;j++)
         {
@@ -884,7 +889,7 @@ void KVStore::load_hnsw_index_from_disk(const std::string &hnsw_data_root)
             FILE* file2 = fopen(edges_path.c_str(), "rb");
             if(file2==NULL)
             {
-                printf("cannot open a file\n");
+                printf("cannot open a file 7\n");
                 return;
             }
             uint32_t num_edges;
@@ -894,8 +899,14 @@ void KVStore::load_hnsw_index_from_disk(const std::string &hnsw_data_root)
             node.layer_connections.push_back(edges);
             fclose(file2);
         }
-        hnsw_index.nodes[node.id] = node;
-    }             
+        if(hnsw_index.nodes.size()==node.id)
+        {
+            hnsw_index.nodes.push_back(node);
+        }
+        fclose(file);
+    }   
+    int a = 1;
+            
 }
 void KVStore::save_embedding_to_disk(const std::string &data_root)
 {
@@ -909,7 +920,7 @@ void KVStore::save_embedding_to_disk(const std::string &data_root)
         FILE* file = fopen((file_path).c_str(), "ab");
         if(file==NULL)
         {
-            printf("cannot open a file\n");
+            printf("cannot open a file 8\n");
             return;
         }
         for(auto it:dirty_keys)
@@ -935,7 +946,7 @@ void KVStore::save_embedding_to_disk(const std::string &data_root)
         FILE* file = fopen((file_path).c_str(), "wb");
         if(file==NULL)
         {
-            printf("cannot open a file\n");
+            printf("cannot open a file 9\n");
             return;
         }
         fwrite(&dim,sizeof(std::uint64_t),1,file);
