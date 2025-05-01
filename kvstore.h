@@ -35,7 +35,13 @@ private:
     std::vector<sstablehead> sstableIndex[15]; // the sshead for each level 这个是一个二维的。
     std::unordered_map<std::uint64_t, std::vector<float>> Cache;
     std::unordered_set<uint64_t> dirty_keys;  // 需要删除的key
-    std::vector<std::vector<float>> deleted_nodes;
+    struct DeletedNode
+    {
+        uint64_t key;
+        std::vector<float> vector;
+        DeletedNode(uint64_t k, std::vector<float> v) : key(k), vector(v) {};
+    };
+    std::vector<DeletedNode> deleted_nodes; //存储key
     int totalLevel = -1; // 层数
     uint64_t dim = 768;
 public:

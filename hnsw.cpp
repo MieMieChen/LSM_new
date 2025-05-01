@@ -44,10 +44,18 @@ void HNSW::insert(uint64_t key, const std::vector<float>& vector) {
     // 分配新的节点ID
     uint64_t node_id = next_node_id++;
     int layer = rand_level();
-    
+    // 检查key是否已经存在
+    if (nodes.find(key) != nodes.end()) {
+        nodes[key].is_deleted = false; // 标记为未删除
+        nodes[key].vector = vector; // 更新向量
+        nodes[key].max_level = std::max(nodes[key].max_level, layer); // 更新最大层级
+    }
     // 创建新节点
-    Node node(key, node_id, vector, layer);
-    nodes[key] = node;
+    else
+    { 
+        Node node(key, node_id, vector, layer);
+        nodes[key] = node;
+    }
     
     // 确保layers至少有一层
     if(layers.empty()) {
@@ -93,6 +101,7 @@ void HNSW::insert(uint64_t key, const std::vector<float>& vector) {
                 continue; // 跳过不在该层的节点
             }
             for(uint64_t neighbor : layers[i][current]) {
+                //如果没用被访问过
                 if(std::find(visited.begin(), visited.end(), neighbor) == visited.end()) {
                     visited.push_back(neighbor);
                     candidates.push_back(neighbor);
@@ -150,9 +159,7 @@ void HNSW::insert(uint64_t key, const std::vector<float>& vector) {
             uint64_t neighbor_key = neighbors[j].second;
             layers[i][key].push_back(neighbor_key);
             layers[i][neighbor_key].push_back(key);
-            //layers当中村的
-            
-            // 更新节点的连接关系
+
             nodes[key].layer_connections[i].push_back(neighbor_key);
             nodes[neighbor_key].layer_connections[i].push_back(key);
             
@@ -179,46 +186,6 @@ void HNSW::insert(uint64_t key, const std::vector<float>& vector) {
     }
 }
 
-// void HNSW::remove(uint64_t key) {
-//     // 检查key是否存在
-//     if (nodes.find(key) == nodes.end()) {
-//         return;  // key不存在，直接返回
-//     }
-
-//     // 从所有层中删除该节点
-//     for (auto& layer : layers) {
-//         // 删除该节点的所有出边
-//         layer.erase(key);
-
-//         // 删除指向该节点的所有入边
-//         for (auto& [neighbor_key, neighbor_edges] : layer) {
-//             auto it = std::find(neighbor_edges.begin(), neighbor_edges.end(), key);
-//             if (it != neighbor_edges.end()) {
-//                 neighbor_edges.erase(it);
-//                 // 更新邻居节点的连接关系
-//                 nodes[neighbor_key].layer_connections[&layer - &layers[0]].erase(
-//                     std::find(nodes[neighbor_key].layer_connections[&layer - &layers[0]].begin(),
-//                              nodes[neighbor_key].layer_connections[&layer - &layers[0]].end(),
-//                              key)
-//                 );
-//             }
-//         }
-//     }
-
-//     // 如果是入口点，需要更新入口点
-//     if (entry_point == key) {
-//         // 找到第0层的任意其他节点作为新的入口点
-//         if (!layers[0].empty()) {
-//             entry_point = layers[0].begin()->first;
-//         } else {
-//             entry_point = -1;  // 如果没有其他节点，重置入口点
-//         }
-//     }
-
-//     // 删除节点
-//     nodes.erase(key);
-// }
-
 uint64_t HNSW::get_entry_point() const {
     return entry_point;
 }
@@ -236,7 +203,7 @@ struct node
 std::vector<std::pair<std::uint64_t, std::string>> HNSW::query(const std::vector<float>& query_vector, int k) {
     std::vector<std::pair<std::uint64_t, std::string>> result;
     
-    if(vectors.empty() || entry_point == -1) {
+    if(nodes.empty() || entry_point == -1) {
         return result; // 空结果
     }
     
@@ -264,7 +231,7 @@ std::vector<std::pair<std::uint64_t, std::string>> HNSW::query(const std::vector
             
             for(uint64_t neighbor : layers[i][current]) {
                 if(std::find(visited.begin(), visited.end(), neighbor) == visited.end()) {
-                    float dist = cosine_similarity(query_vector, vectors[neighbor]);
+                    float dist = cosine_similarity(query_vector, nodes[neighbor].vector);
                     visited.push_back(neighbor);
                     candidates.push_back(node(neighbor,dist));
                     if(candidates.size() > globalHeader.efConstruction) {
@@ -294,16 +261,12 @@ std::vector<std::pair<std::uint64_t, std::string>> HNSW::query(const std::vector
     std::list<node> candidates;
     
     // 计算与入口点的相似度
-    float initial_sim = cosine_similarity(query_vector, vectors[curr_entry_point]);
+    float initial_sim = cosine_similarity(query_vector, nodes[curr_entry_point].vector);
     candidates.push_back(node(curr_entry_point, initial_sim));
     visited.push_back(curr_entry_point);
     top_candidates.push_back({initial_sim, curr_entry_point});
-    
-    // 使用更大的efSearch参数来提高搜索精度（通常efSearch > efConstruction）
-    int efSearch = std::max(globalHeader.efConstruction, (uint32_t)k);
-    
+        
     while(!candidates.empty()) {
-        // 取出当前候选节点（相似度最高的）
         candidates.sort([](const node& a, const node& b) {
             return a.dist > b.dist; // 按相似度降序排列
         });
@@ -312,8 +275,7 @@ std::vector<std::pair<std::uint64_t, std::string>> HNSW::query(const std::vector
         float current_dist = candidates.front().dist;
         candidates.pop_front();
         
-        // 如果当前节点的相似度低于top_candidates中最小的，并且我们已经有至少efSearch个候选
-        if(top_candidates.size() >= efSearch) {
+        if(top_candidates.size() >= globalHeader.efConstruction) {
             std::sort(top_candidates.begin(), top_candidates.end(),
                 [](const auto& a, const auto& b) { return a.first < b.first; }); // 按相似度升序
             
@@ -330,18 +292,22 @@ std::vector<std::pair<std::uint64_t, std::string>> HNSW::query(const std::vector
             if(std::find(visited.begin(), visited.end(), neighbor) == visited.end()) {
                 visited.push_back(neighbor);
                 
-                float dist = cosine_similarity(query_vector, vectors[neighbor]);
+                float dist = cosine_similarity(query_vector, nodes[neighbor].vector);
                 candidates.push_back(node(neighbor, dist));
                 top_candidates.push_back({dist, neighbor});
                 
-                // 保持top_candidates的大小不超过efSearch
-                if(top_candidates.size() > efSearch * 2) { // 允许增长到2倍大小再裁剪，减少排序次数
+                if(top_candidates.size() > globalHeader.efConstruction) { 
                     std::sort(top_candidates.begin(), top_candidates.end(),
-                        [](const auto& a, const auto& b) { return a.first > b.first; }); // 按相似度降序
-                    
-                    if(top_candidates.size() > efSearch) {
-                        top_candidates.resize(efSearch);
-                    }
+                        [](const auto& a, const auto& b) { return a.first > b.first; }); 
+
+                        // 为了保证之后能有k个 剪枝的时候要把已经delete的数量计算出来 最后再删除
+                        uint64_t deleted_count = 0;
+                        for(auto it = top_candidates.begin(); it != top_candidates.end(); ++it) {
+                            if(nodes[it->second].is_deleted) {
+                               deleted_count++;
+                            }
+                        }
+                        top_candidates.resize(std::min(globalHeader.efConstruction+deleted_count,top_candidates.size()));
                 }
             }
         }
@@ -350,13 +316,19 @@ std::vector<std::pair<std::uint64_t, std::string>> HNSW::query(const std::vector
     // 最终按相似度降序排序
     std::sort(top_candidates.begin(), top_candidates.end(), 
         [](const auto& a, const auto& b) { return a.first > b.first; });
-    
+    uint64_t counts = 0;
     // 取前k个结果
-    int result_size = std::min(k, static_cast<int>(top_candidates.size()));
-    for(int i = 0; i < result_size; i++) {
-        // 注意：由于我们没有实际的字符串值，这里只返回键
-        // 实际应用中，你需要从某处获取对应的字符串值
-        result.push_back({top_candidates[i].second," "}); // 第二个值应该是对应的字符串
+    // int result_size = std::min(k, static_cast<int>(top_candidates.size()));
+    for(int i = 0; i < top_candidates.size(); i++) {
+
+        if(nodes[top_candidates[i].second].is_deleted) {
+            continue; // 跳过已删除的节点
+        }
+        if(counts >= k) {
+            break;
+        }
+        result.push_back({top_candidates[i].second," "}); // 第二个值应该是对应的字符串 second对应的是key
+        counts++;
     }
     
     return result;

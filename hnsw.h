@@ -18,6 +18,7 @@ struct Node {
     uint32_t id;   // 节点的ID
     std::vector<float> vector;  // 节点的向量  存向量还是embedding
     std::vector<std::vector<uint64_t>> layer_connections;  // 每层的连接关系
+    bool is_deleted = false; // 节点是否被删除
     int max_level;  // 节点所在的最高层
     Node() = default;   
     Node(uint64_t k, uint32_t i, const std::vector<float>& v, int level) 
@@ -60,7 +61,7 @@ class HNSW {
         std::unordered_map<uint64_t, uint64_t> id_to_key;  // 节点ID到键值的映射
         std::unordered_map<uint64_t, Node> nodes;
     private:
-        std::unordered_map<uint64_t, std::vector<float>> vectors; // 存储每个节点的向量
+        // std::unordered_map<uint64_t, std::vector<float>> vectors; // 存储每个节点的向量
         uint64_t next_node_id=0; // 下一个可用的节点ID
         int rand_level();
         int entry_point = -1;

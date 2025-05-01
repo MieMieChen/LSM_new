@@ -191,7 +191,9 @@ std::string KVStore::get(uint64_t key) //
  */
 bool KVStore::del(uint64_t key) {
     std::vector<float> embeddingString = Cache[key];
-    deleted_nodes.push_back(embeddingString);
+    hnsw_index.nodes[key].is_deleted = true; // 标记为删除 但是不修改vector？保证之后还是能够用来计算的？
+    deleted_nodes.push_back(DeletedNode(key, embeddingString));
+    //是在落入磁盘的时候判断内存中是否还有这个key对应的向量 然后来判断是修改了还是删除，
     Cache.erase(key);  // 从内存移除
     dirty_keys.insert(key);  // 标记为删除
     std::string res = get(key);
@@ -750,7 +752,8 @@ void KVStore::save_hnsw_index_to_disk(const std::string &hnsw_data_root)
     uint64_t deleted_size = deleted_nodes.size();
     for(int i = 0;i<deleted_size;i++)
     {
-        fwrite(deleted_nodes[i].data(),sizeof(float),dim,file2);
+        fwrite(&deleted_nodes[i].key,sizeof(uint64_t),1,file2);
+        fwrite(deleted_nodes[i].vector.data(),sizeof(float),dim,file2);
     }
     fclose(file2);
     if (!utils::dirExists(hnsw_data_root + "/nodes")) {
@@ -837,13 +840,15 @@ void KVStore::load_hnsw_index_from_disk(const std::string &hnsw_data_root)
     std::cout << "load global header successfully!" << std::endl;
     fseek(file2, 0, SEEK_END);
     uint64_t file_size = ftell(file2);
-    uint64_t blocksize = 4*dim;
+    uint64_t blocksize = 4*dim+sizeof(uint64_t);
     uint64_t blockNum =(file_size)/blocksize;
     for(int i = 0;i<blockNum;i++)
     {
         std::vector<float> deleted(dim);
+        uint64_t key;
+        fread(&key,sizeof(uint64_t),1,file2);
         fread(deleted.data(),sizeof(float),dim,file2);
-        deleted_nodes.push_back(deleted);
+        deleted_nodes.push_back(DeletedNode(key, deleted));
     }
     fclose(file2);
     std::cout << "load deleted nodes successfully!" << std::endl;
@@ -851,8 +856,6 @@ void KVStore::load_hnsw_index_from_disk(const std::string &hnsw_data_root)
     std::string nodes_path = hnsw_data_root + "/nodes/";
     for(int i = 0;i<hnsw_index.globalHeader.num_nodes;i++)
     {
-        // Node node(key, node_id, vector, layer);
-        // nodes[key] = node;
         std::string node_path_root = nodes_path + std::to_string(i) + "/";
         std::string header_path = node_path_root + "header.bin";
         FILE* file = fopen(header_path.c_str(), "rb");
