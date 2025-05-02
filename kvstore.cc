@@ -683,10 +683,28 @@ std::vector<std::pair<std::uint64_t, std::string>> KVStore::search_knn_hnsw(std:
     result = hnsw_index.query(embStr, k);
     for(int i = 0; i < result.size(); i++)
     {
-        result[i].second = get(result[i].first);
-        if(result[i].second == DEL)
-            result[i].second = "";
+        std::vector<float> emb = hnsw_index.nodes[result[i].first].vector;
+        for(auto it:Cache) {
+            if(it.second == emb) {
+                result[i].second = get(it.first);
+            }
+            if(result[i].second == DEL)
+               result[i].second = "";
+        }
     }
+    // for(auto it:Cache) {
+    //     if(it.first == top_candidates[i].second) {
+    //         vector = it.second;
+    //         break;
+    //     }
+    // }
+
+    // for(int i = 0; i < result.size(); i++)
+    // {
+    //     result[i].second = get(result[i].first);
+    //     if(result[i].second == DEL)
+    //         result[i].second = "";
+    // }
     return result;
 
 }

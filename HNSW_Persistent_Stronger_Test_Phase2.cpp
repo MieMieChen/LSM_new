@@ -27,14 +27,15 @@ bool check_result(std::vector<std::pair<std::uint64_t, std::string>> result,
 
 int main() {
   KVStore store("data/");
+  store.load_embedding_from_disk("data/");
 
-  store.load_hnsw_index_from_disk("hnsw_data/");
+  store.load_hnsw_index_from_disk("./hnsw_data_root/");
 
   int pass = 0;
   int total = 128;
   int phase[4] = {0, 32, 64, 96};
 
-  std::vector<std::string> text = load_text("data/trimmed_text.txt");
+  std::vector<std::string> text = load_text("../data/trimmed_text.txt");
 
   //  delete test
   pass = 0;
@@ -69,6 +70,7 @@ int main() {
     std::cerr << "Test failed." << std::endl;
     return 0;
   }
+  std::cout << "accept rate: " << (double)pass / 32.0 << std::endl;
 
   //  replace test
   pass = 0;
@@ -95,6 +97,7 @@ int main() {
     std::cerr << "Test failed." << std::endl;
     return 0;
   }
+  std::cout << "accept rate: " << (double)pass / 32.0 << std::endl;
 
   std::cout << "Test passed" << std::endl;
   return 0;

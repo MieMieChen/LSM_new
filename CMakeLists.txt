@@ -100,6 +100,20 @@ add_executable(Vector_Persistent_Test_Phase2 Vector_Persistent_Test_Phase2.cpp k
         sstablehead.cpp sstablehead.h embedding/embedding.h embedding/embedding.cc hnsw.cpp hnsw.h)
 target_link_libraries(Vector_Persistent_Test_Phase2 PRIVATE llama common)
 
+
+add_executable(HNSW_Persistent_Stronger_Test_Phase1  HNSW_Persistent_Stronger_Test_Phase1.cpp kvstore_api.h kvstore.h kvstore.cc
+        skiplist.cpp skiplist.h sstable.cpp sstable.h
+        bloom.cpp bloom.h MurmurHash3.h utils.h test.h
+        sstablehead.cpp sstablehead.h embedding/embedding.h embedding/embedding.cc hnsw.cpp hnsw.h)
+target_link_libraries(HNSW_Persistent_Stronger_Test_Phase1 PRIVATE llama common)
+
+add_executable( HNSW_Persistent_Stronger_Test_Phase2  HNSW_Persistent_Stronger_Test_Phase2.cpp kvstore_api.h kvstore.h kvstore.cc
+        skiplist.cpp skiplist.h sstable.cpp sstable.h
+        bloom.cpp bloom.h MurmurHash3.h utils.h test.h
+        sstablehead.cpp sstablehead.h embedding/embedding.h embedding/embedding.cc hnsw.cpp hnsw.h)
+target_link_libraries(HNSW_Persistent_Stronger_Test_Phase2 PRIVATE llama common)
+
+
 add_subdirectory(third_party/llama.cpp)
 
 add_subdirectory(embedding)

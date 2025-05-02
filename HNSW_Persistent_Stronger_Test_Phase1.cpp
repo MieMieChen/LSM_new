@@ -16,7 +16,7 @@ int main() {
   KVStore store("data/");
   store.reset();
 
-  std::vector<std::string> text = load_text("data/trimmed_text.txt");
+  std::vector<std::string> text = load_text("../data/trimmed_text.txt");
   const int total = 128;
   const int phase[4] = {0, 32, 64, 96};
 
@@ -37,7 +37,7 @@ int main() {
     store.put(i, text[j]);
   }
 
-  store.save_hnsw_index_to_disk("hnsw_data/");
+  store.save_hnsw_index_to_disk("./hnsw_data_root/");
 
   return 0;
 }
