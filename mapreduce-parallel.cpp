@@ -5,6 +5,10 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <thread> // For std::thread
+#include <cctype>  // For std::tolower and std::isalpha
+
+
 
 std::string clean_word(std::string word) {
   std::transform(word.begin(), word.end(), word.begin(), ::tolower);

@@ -7,6 +7,8 @@
 #include <queue>
 #include <thread>
 #include <vector>
+#include <thread>
+
 
 void simulate_work(int id, int duration_ms = 100) {
   std::this_thread::sleep_for(std::chrono::milliseconds(duration_ms));
@@ -66,7 +68,7 @@ private:
   std::vector<std::thread> workers;
   std::queue<std::function<void()>> tasks;
   std::mutex queue_mutex;
-  std::condition_variable condition;
+  std::condition_variable condition;  //条件变量
   bool stop;
 };
 

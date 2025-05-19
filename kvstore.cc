@@ -15,6 +15,7 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <filesystem>
+#include "shared_data.h"
 
 namespace fs = std::filesystem;
 static const std::string DEL = "~DELETED~";
@@ -95,6 +96,7 @@ KVStore::~KVStore()
     //cache落入磁盘
     save_embedding_to_disk("./data/");
     save_hnsw_index_to_disk("./hnsw_data_root/");
+    sstableIndex[0].push_back(ss.getHead());
     compaction(); 
 }
 
@@ -102,8 +104,43 @@ KVStore::~KVStore()
  * Insert/Update the key-value pair.
  * No return values for simplicity.
  */
+// void KVStore::put(uint64_t key, const std::string &val) {
+//     std::vector<float> embeddingString = embedding_single(val);
+//     Cache[key]= embeddingString;
+//     dirty_keys.insert(key);
+//     hnsw_index.insert(key, embeddingString);
+
+//     uint32_t nxtsize = s->getBytes();
+//     std::string res  = s->search(key);
+//     if (!res.length()) { // new add
+//         nxtsize += 12 + val.length();
+//     } else
+//         nxtsize = nxtsize - res.length() + val.length(); // change string
+//     if (nxtsize + 10240 + 32 <= MAXSIZE)
+//        {
+//         s->insert(key, val);
+//        }  // 小于等于（不超过） 2MB
+//     else {
+//         sstable ss(s);
+//         s->reset();
+//         std::string url  = ss.getFilename();
+//         std::string path = "./data/level-0";
+//         if (!utils::dirExists(path)) {
+//             utils::mkdir(path.data());
+//             totalLevel = 0;
+//         }
+//         addsstable(ss, 0);      // 加入缓存
+//         ss.putFile(url.data()); // 加入磁盘
+//         //这里可以写一下cache
+//         compaction();
+//         s->insert(key, val);
+//     }
+
+// }
+//现在要绕过embedding 直接根据val找到被embed好的向量
 void KVStore::put(uint64_t key, const std::string &val) {
-    std::vector<float> embeddingString = embedding_single(val);
+    // std::vector<float> embeddingString = embedding_single(val);
+    std::vector<float> embeddingString = sentence2line[val];
     Cache[key]= embeddingString;
     dirty_keys.insert(key);
     hnsw_index.insert(key, embeddingString);
@@ -135,7 +172,6 @@ void KVStore::put(uint64_t key, const std::string &val) {
     }
 
 }
-
 /**
  * Returns the (string) value of the given key.
  * An empty string indicates not found.
@@ -669,8 +705,8 @@ std::vector<std::pair<std::uint64_t, std::string>> KVStore::query_knn(std::vecto
 
 
 std::vector<std::pair<std::uint64_t, std::string>> KVStore::search_knn(std::string query, int k) {
-    std::vector<float> embStr = embedding_single(query);
-    
+    // std::vector<float> embStr = embedding_single(query);
+    std::vector<float> embStr = sentence2line[query];
     std::vector<std::pair<std::uint64_t, std::string>> result = query_knn(embStr,k);
     return result;
 }
