@@ -4,15 +4,6 @@
 #include <vector>
 #include "shared_data.h"
 
-// std::vector<std::string> load_text(std::string filename) {
-//   std::ifstream file(filename);
-//   std::string line;
-//   std::vector<std::string> text;
-//   while (std::getline(file, line)) {
-//     text.push_back(line);
-//   }
-//   return text;
-// }
 
 std::string trim(const std::string& str) {
     auto first = str.find_first_not_of(" \t\n\r\f\v");
@@ -99,11 +90,25 @@ int main() {
 
   bool pass = true;
 
-  // int total = valid_sentences.size() ;
+  //int total = valid_sentences.size() ;
   int total = 50;
+  // for (int i = 0; i < total; i++) {
+  //   std::vector<std::pair<std::uint64_t, std::string>> result =
+  //       store.search_knn(valid_sentences[i], 1);
+  //   if (result.size() != 1) {
+  //     std::cout << "Error: result.size() != 1" << std::endl;
+  //     pass = false;
+  //     continue;
+  //   }
+  //   if (result[0].second != valid_sentences[i]) {
+  //     std::cout << "Error: value[" << i << "] is not correct" << std::endl;
+  //     pass = false;
+  //   }
+  // }
+
   for (int i = 0; i < total; i++) {
     std::vector<std::pair<std::uint64_t, std::string>> result =
-        store.search_knn(valid_sentences[i], 1);
+        store.search_knn_parallel(valid_sentences[i], 1);
     if (result.size() != 1) {
       std::cout << "Error: result.size() != 1" << std::endl;
       pass = false;
@@ -114,6 +119,10 @@ int main() {
       pass = false;
     }
   }
+
+
+
+
 
   if (pass) {
     std::cout << "Test passed" << std::endl;

@@ -11,6 +11,20 @@
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility> 
+#include <future>
+
+#include <vector>
+#include <string>
+#include <cstdint>
+#include <cmath> // For cosine_similarity calculations (dot product, magnitude)
+#include <queue> // For std::priority_queue
+#include <utility> // For std::pair
+#include <future> // For std::async and std::future
+#include <numeric> // For std::iota (optional, helpful for chunking)
+#include <algorithm> // For std::sort, std::reverse
+#include <iostream> // For demonstration output
+#include <map> 
 
 struct KVT
 {
@@ -44,6 +58,13 @@ private:
     std::vector<DeletedNode> deleted_nodes; //存储key
     int totalLevel = -1; // 层数
     uint64_t dim = 768;
+    using SimKey = std::pair<float, std::uint64_t>;
+    std::vector<SimKey> find_top_k_in_chunk(
+       std::unordered_map<std::uint64_t, std::vector<float>>::const_iterator begin,
+       std::unordered_map<std::uint64_t, std::vector<float>>::const_iterator end,
+        const std::vector<float>& query_embedding,
+        int k_per_chunk);
+    
 public:
     KVStore(const std::string &dir);
     HNSW hnsw_index; // M, M_max, efConstruction, m_L, dim
@@ -65,6 +86,7 @@ public:
     void delsstable(std::string filename);  // 从缓存中删除filename.sst， 并物理删除
     void addsstable(sstable ss, int level); // 将ss加入缓存
     std::vector<std::pair<std::uint64_t, std::string>> search_knn(std::string query, int k);
+    std::vector<std::pair<std::uint64_t, std::string>> search_knn_parallel(std::string query, int k);
     float cosine_similarity(std::vector<float> a,std::vector<float> b);
     float dot_product(std::vector<float>a,std::vector<float>b);
     float vector_norm(std::vector<float>a);
@@ -72,6 +94,9 @@ public:
     std::string fetchString(std::string file, int startOffset, uint32_t len);
     std::vector<std::pair<std::uint64_t, std::string>>search_knn_hnsw(std::string query, int k);
     std::vector<std::pair<std::uint64_t, std::string>> query_knn(std::vector<float> embStr,int k);
+    std::vector<std::pair<std::uint64_t, std::string>> query_knn_parallel(const std::vector<float>& embStr, int k);
+
+    
     void save_embedding_to_disk(const std::string &data_root);
     void load_embedding_from_disk(const std::string &data_root);
     void save_hnsw_index_to_disk(const std::string &hnsw_data_root);
