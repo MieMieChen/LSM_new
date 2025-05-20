@@ -2,6 +2,9 @@
 #include <fstream>
 #include <vector>
 #include "shared_data.h"
+#include <numeric>
+#include <chrono>
+
 // std::unordered_map<std::string, std::vector<float> >sentence2line;
 // std::vector<std::vector<float>> embedding_lines;
 // std::vector<std::string> valid_sentences;
@@ -102,7 +105,7 @@ int main() {
 
   load_sentence_embedding_mapping();  
 //   int total = valid_sentences.size() ;
-  int total = 50;
+  int total = 4096;
   for (int i = 0; i < total; i++) {
     store.put(i, valid_sentences[i]);
   }

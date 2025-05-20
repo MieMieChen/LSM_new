@@ -95,7 +95,7 @@ KVStore::~KVStore()
     ss.putFile(ss.getFilename().data());
     //cache落入磁盘
     save_embedding_to_disk("./data/");
-    save_hnsw_index_to_disk("./hnsw_data_root/");
+    // save_hnsw_index_to_disk("./hnsw_data_root/");
     sstableIndex[0].push_back(ss.getHead());
     compaction(); 
 }
@@ -142,8 +142,8 @@ void KVStore::put(uint64_t key, const std::string &val) {
     // std::vector<float> embeddingString = embedding_single(val);
     std::vector<float> embeddingString = sentence2line[val];
     Cache[key]= embeddingString;
-    dirty_keys.insert(key);
-    hnsw_index.insert(key, embeddingString);
+    // dirty_keys.insert(key);
+    // hnsw_index.insert(key, embeddingString);
 
     uint32_t nxtsize = s->getBytes();
     std::string res  = s->search(key);
@@ -1116,7 +1116,7 @@ std::vector<std::pair<std::uint64_t, std::string>> KVStore::query_knn_parallel(
         );
     }
 
-    auto cmp_global = [](const SimKey& a, const SimKey& b) { return a.first < b.first; };
+    auto cmp_global = [](const SimKey& a, const SimKey& b) { return a.first > b.first; };
     std::priority_queue<SimKey, std::vector<SimKey>, decltype(cmp_global)> top_k_global(cmp_global);
 
     for (auto& fut : map_futures) {

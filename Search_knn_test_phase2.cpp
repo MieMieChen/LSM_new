@@ -3,7 +3,8 @@
 #include <iostream>
 #include <vector>
 #include "shared_data.h"
-
+#include <numeric>
+#include <chrono>
 
 std::string trim(const std::string& str) {
     auto first = str.find_first_not_of(" \t\n\r\f\v");
@@ -91,7 +92,9 @@ int main() {
   bool pass = true;
 
   //int total = valid_sentences.size() ;
-  int total = 50;
+  //serial
+  int total = 8192;
+  // auto startTime = std::chrono::high_resolution_clock::now();
   // for (int i = 0; i < total; i++) {
   //   std::vector<std::pair<std::uint64_t, std::string>> result =
   //       store.search_knn(valid_sentences[i], 1);
@@ -105,7 +108,12 @@ int main() {
   //     pass = false;
   //   }
   // }
+  // auto endTime = std::chrono::high_resolution_clock::now();
+  // auto totalDuration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
+  // std::cout << "Serial Total time: " << totalDuration.count() << " milliseconds" << std::endl;
 
+  //parallel
+  auto startTime = std::chrono::high_resolution_clock::now();
   for (int i = 0; i < total; i++) {
     std::vector<std::pair<std::uint64_t, std::string>> result =
         store.search_knn_parallel(valid_sentences[i], 1);
@@ -119,7 +127,9 @@ int main() {
       pass = false;
     }
   }
-
+  auto endTime = std::chrono::high_resolution_clock::now();
+  auto totalDuration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
+  std::cout << "Paralle Total time: " << totalDuration.count() << " milliseconds" << std::endl;
 
 
 
