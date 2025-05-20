@@ -93,7 +93,7 @@ int main() {
 
   //int total = valid_sentences.size() ;
   //serial
-  int total = 8192;
+  int total = 128;
   // auto startTime = std::chrono::high_resolution_clock::now();
   // for (int i = 0; i < total; i++) {
   //   std::vector<std::pair<std::uint64_t, std::string>> result =
@@ -112,7 +112,7 @@ int main() {
   // auto totalDuration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
   // std::cout << "Serial Total time: " << totalDuration.count() << " milliseconds" << std::endl;
 
-  //parallel
+  // parallel
   auto startTime = std::chrono::high_resolution_clock::now();
   for (int i = 0; i < total; i++) {
     std::vector<std::pair<std::uint64_t, std::string>> result =

@@ -689,11 +689,11 @@ std::vector<std::pair<std::uint64_t, std::string>> KVStore::query_knn(std::vecto
         float sim = cosine_similarity(embedding, embStr);
         top_k.push({sim, {key, get(key)}});
         if (top_k.size() > k) {
-            top_k.pop(); // 移除当前最小的相似度
+            top_k.pop(); 
         }
     }
 
-    // 转换为降序排列
+   
     while (!top_k.empty()) {
         result.push_back(top_k.top().second);
         top_k.pop();
@@ -735,19 +735,7 @@ std::vector<std::pair<std::uint64_t, std::string>> KVStore::search_knn_hnsw(std:
                result[i].second = "";
         }
     }
-    // for(auto it:Cache) {
-    //     if(it.first == top_candidates[i].second) {
-    //         vector = it.second;
-    //         break;
-    //     }
-    // }
-
-    // for(int i = 0; i < result.size(); i++)
-    // {
-    //     result[i].second = get(result[i].first);
-    //     if(result[i].second == DEL)
-    //         result[i].second = "";
-    // }
+    
     return result;
 
 }
@@ -1040,7 +1028,6 @@ std::vector<KVStore::SimKey> KVStore::find_top_k_in_chunk(
     const std::vector<float>& query_embedding,
     int k_per_chunk)
 {
-    // 小顶堆，用于维护块内 Top-K 相似度，堆顶是最小的相似度
     auto cmp = [](const SimKey& a, const SimKey& b) { return a.first > b.first; };
     std::priority_queue<SimKey, std::vector<SimKey>, decltype(cmp)> top_k_chunk(cmp);
 
@@ -1081,7 +1068,8 @@ std::vector<std::pair<std::uint64_t, std::string>> KVStore::query_knn_parallel(
     }
 
     
-    const size_t num_threads = std::thread::hardware_concurrency();
+    const size_t num_threads = std::thread::hardware_concurrency(); //可以修改这个变量来改变线程数
+    // const size_t num_threads = 1;
 
 
     std::vector<std::unordered_map<std::uint64_t, std::vector<float>>::const_iterator> chunk_starts;
@@ -1091,8 +1079,7 @@ std::vector<std::pair<std::uint64_t, std::string>> KVStore::query_knn_parallel(
 
     auto current_it = Cache.cbegin();
     for (size_t i = 0; i < num_threads - 1; ++i) {
-        // 尝试前进 approximate_elements_per_thread 个元素
-        // 注意：std::map 的迭代器前进是 O(log N) 或 O(1) 平均，取决于实现，但不像 vector 那样 O(1) 保证
+
         size_t elements_advanced = 0;
         while(elements_advanced < elements_per_thread && current_it != Cache.end()){
              ++current_it;
@@ -1100,7 +1087,7 @@ std::vector<std::pair<std::uint64_t, std::string>> KVStore::query_knn_parallel(
         }
         chunk_starts.push_back(current_it);
     }
-    chunk_starts.push_back(Cache.cend()); // 最后一个块的结束迭代器
+    chunk_starts.push_back(Cache.cend()); 
 
     std::vector<std::future<std::vector<SimKey>>> map_futures;
     int k_per_chunk = k;
@@ -1132,18 +1119,16 @@ std::vector<std::pair<std::uint64_t, std::string>> KVStore::query_knn_parallel(
             }
         } catch (const std::exception& e) {
             std::cerr << "Error in Map task: " << e.what() << std::endl;
-            // 根据需要处理错误，可能需要中止或记录
+          
         }
     }
 
-    // 4. 提取最终 Top-K keys
     std::vector<SimKey> final_sim_keys;
     final_sim_keys.reserve(top_k_global.size());
     while(!top_k_global.empty()){
         final_sim_keys.push_back(top_k_global.top());
         top_k_global.pop();
     }
-    // 此时 final_sim_keys 是按相似度升序排列的 Top-K SimKey 对
     std::reverse(final_sim_keys.begin(), final_sim_keys.end()); // 变为降序排列
     std::vector<std::future<std::string>> get_futures;
     std::vector<std::uint64_t> keys;
@@ -1169,9 +1154,7 @@ std::vector<std::pair<std::uint64_t, std::string>> KVStore::query_knn_parallel(
             result.emplace_back(keys[i], get_futures[i].get());
         } catch (const std::exception& e) {
             std::cerr << "Error in Get task: " << e.what() << std::endl;
-            // 可以选择插入一个空结果或跳过
         }
     }
-
     return result;
 }

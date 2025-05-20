@@ -4,7 +4,7 @@
 #include <string>
 #include <unordered_map>
 
-extern std::unordered_map<std::string, std::vector<float> >sentence2line;
+extern std::unordered_map<std::string, std::vector<float>>sentence2line;
 extern std::vector<std::vector<float>> embedding_lines;
 extern std::vector<std::string> valid_sentences;
 extern bool embedding_loaded;

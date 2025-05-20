@@ -131,8 +131,8 @@ std::vector<std::pair<std::uint64_t, std::string>> KVStore::query_knn_parallel(
     }
 
     
-    const size_t num_threads = std::thread::hardware_concurrency();
-
+    //const size_t num_threads = std::thread::hardware_concurrency();
+    const size_t num_threads = 1; // 或者根据需要设置线程数
 
     std::vector<typename std::map<std::uint64_t, std::vector<float>>::const_iterator> chunk_starts;
     chunk_starts.push_back(Cache.begin());
@@ -141,8 +141,6 @@ std::vector<std::pair<std::uint64_t, std::string>> KVStore::query_knn_parallel(
 
     auto current_it = Cache.begin();
     for (size_t i = 0; i < num_threads - 1; ++i) {
-        // 尝试前进 approximate_elements_per_thread 个元素
-        // 注意：std::map 的迭代器前进是 O(log N) 或 O(1) 平均，取决于实现，但不像 vector 那样 O(1) 保证
         size_t elements_advanced = 0;
         while(elements_advanced < elements_per_thread && current_it != Cache.end()){
              ++current_it;

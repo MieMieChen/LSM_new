@@ -104,8 +104,8 @@ int main() {
 
 
   load_sentence_embedding_mapping();  
-//   int total = valid_sentences.size() ;
-  int total = 4096;
+  int total = valid_sentences.size() ; // cleaned_text_100k.txt 文件中，有 7543 条句子是重复的，导致它们在 sentence2line 映射中被覆盖了
+  // int total = 4096;
   for (int i = 0; i < total; i++) {
     store.put(i, valid_sentences[i]);
   }
