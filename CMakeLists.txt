@@ -12,6 +12,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_COMPILER_ID "GNU")
 set(CMAKE_CXX_COMPILER_VERSION "14.2.0")
 
+# Find OpenMP
 find_package(OpenMP REQUIRED)
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -22,140 +23,112 @@ if(OpenMP_CXX_FOUND)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
 
+# Set directory paths
+set(TEST_DIR ${PROJECT_SOURCE_DIR}/test)
+
+# Include directories
 include_directories(
-        embedding
-        third_party/llama.cpp/common
-        third_party/llama.cpp/include
-        third_party/llama.cpp
-        third_party/llama.cpp/ggml/include
-        third_party/llama.cpp/ggml/src
+    ${PROJECT_SOURCE_DIR}
+    ${PROJECT_SOURCE_DIR}/embedding
+    ${PROJECT_SOURCE_DIR}/third_party/llama.cpp/common
+    ${PROJECT_SOURCE_DIR}/third_party/llama.cpp/include
+    ${PROJECT_SOURCE_DIR}/third_party/llama.cpp
+    ${PROJECT_SOURCE_DIR}/third_party/llama.cpp/ggml/include
+    ${PROJECT_SOURCE_DIR}/third_party/llama.cpp/ggml/src
 )
 
-add_executable(correctness correctness.cc kvstore_api.h kvstore.h
-        kvstore.cc skiplist.cpp skiplist.h sstable.cpp sstable.h shared_data.h shared_data.cpp  
-        bloom.cpp bloom.h MurmurHash3.h utils.h test.h embedding/embedding.cc
-        sstablehead.cpp sstablehead.h embedding/embedding.h hnsw.cpp hnsw.h)
+# Define source files
+set(COMMON_SOURCES
+    ${PROJECT_SOURCE_DIR}/kvstore.cc
+    ${PROJECT_SOURCE_DIR}/skiplist.cpp
+    ${PROJECT_SOURCE_DIR}/sstable.cpp
+    ${PROJECT_SOURCE_DIR}/shared_data.cpp
+    ${PROJECT_SOURCE_DIR}/bloom.cpp
+    ${PROJECT_SOURCE_DIR}/sstablehead.cpp
+    ${PROJECT_SOURCE_DIR}/embedding/embedding.cc
+    ${PROJECT_SOURCE_DIR}/hnsw.cpp
+)
+
+# Define header files
+set(COMMON_HEADERS
+    ${PROJECT_SOURCE_DIR}/kvstore_api.h
+    ${PROJECT_SOURCE_DIR}/kvstore.h
+    ${PROJECT_SOURCE_DIR}/skiplist.h
+    ${PROJECT_SOURCE_DIR}/sstable.h
+    ${PROJECT_SOURCE_DIR}/shared_data.h
+    ${PROJECT_SOURCE_DIR}/bloom.h
+    ${PROJECT_SOURCE_DIR}/MurmurHash3.h
+    ${PROJECT_SOURCE_DIR}/utils.h
+    ${PROJECT_SOURCE_DIR}/test.h
+    ${PROJECT_SOURCE_DIR}/sstablehead.h
+    ${PROJECT_SOURCE_DIR}/embedding/embedding.h
+    ${PROJECT_SOURCE_DIR}/hnsw.h
+)
+
+# Test executables
+add_executable(correctness ${PROJECT_SOURCE_DIR}/test/correctness.cc ${COMMON_SOURCES})
 target_link_libraries(correctness PRIVATE llama common)
 
+add_executable(correctness2 ${PROJECT_SOURCE_DIR}/test/correctness2.cc ${COMMON_SOURCES})
+target_link_libraries(correctness2 PRIVATE llama common)
 
-# add_executable(correctness2 correctness2.cc kvstore_api.h kvstore.h
-#         kvstore.cc skiplist.cpp skiplist.h sstable.cpp sstable.h
-#         bloom.cpp bloom.h MurmurHash3.h utils.h test.h embedding/embedding.cc
-#         sstablehead.cpp sstablehead.h embedding/embedding.h hnsw.cpp hnsw.h)
-# target_link_libraries(correctness2 PRIVATE llama common)
-
-
-add_executable(E2E_test test/E2E_test.cpp kvstore_api.h kvstore.h
-        kvstore.cc skiplist.cpp skiplist.h sstable.cpp sstable.h shared_data.h shared_data.cpp
-        bloom.cpp bloom.h MurmurHash3.h utils.h test.h embedding/embedding.cc shared_data.h shared_data.cpp
-        sstablehead.cpp sstablehead.h embedding/embedding.h third_party/llama.cpp/common/common.h hnsw.cpp hnsw.h)
-
+add_executable(E2E_test ${PROJECT_SOURCE_DIR}/test/E2E_test.cpp ${COMMON_SOURCES})
 target_link_libraries(E2E_test PRIVATE llama common)
 
-add_executable(persistence persistence.cc kvstore_api.h kvstore.h kvstore.cc
-        skiplist.cpp skiplist.h sstable.cpp sstable.h
-        bloom.cpp bloom.h MurmurHash3.h utils.h test.h shared_data.h shared_data.cpp
-        sstablehead.cpp sstablehead.h embedding/embedding.h embedding/embedding.cc hnsw.cpp hnsw.h)
+add_executable(persistence ${PROJECT_SOURCE_DIR}/test/persistence.cc ${COMMON_SOURCES})
 target_link_libraries(persistence PRIVATE llama common)
 
-add_executable(performance_test performance_test.cc kvstore_api.h kvstore.h kvstore.cc
-        skiplist.cpp skiplist.h sstable.cpp sstable.h
-        bloom.cpp bloom.h MurmurHash3.h utils.h test.h shared_data.h shared_data.cpp
-        sstablehead.cpp sstablehead.h embedding/embedding.h embedding/embedding.cc hnsw.cpp hnsw.h)
+# Performance test executables
+add_executable(performance_test ${PROJECT_SOURCE_DIR}/test/performance_test.cc ${COMMON_SOURCES})
 target_link_libraries(performance_test PRIVATE llama common)
 
-add_executable(performance_test_small performance_test_small.cc kvstore_api.h kvstore.h kvstore.cc
-        skiplist.cpp skiplist.h sstable.cpp sstable.h
-        bloom.cpp bloom.h MurmurHash3.h utils.h test.h shared_data.h shared_data.cpp
-        sstablehead.cpp sstablehead.h embedding/embedding.h embedding/embedding.cc hnsw.cpp hnsw.h)
+add_executable(performance_test_small ${PROJECT_SOURCE_DIR}/test/performance_test_small.cc ${COMMON_SOURCES})
 target_link_libraries(performance_test_small PRIVATE llama common)
 
-add_executable(performance_test_large performance_test_large.cc kvstore_api.h kvstore.h kvstore.cc
-        skiplist.cpp skiplist.h sstable.cpp sstable.h
-        bloom.cpp bloom.h MurmurHash3.h utils.h test.h shared_data.h shared_data.cpp
-        sstablehead.cpp sstablehead.h embedding/embedding.h embedding/embedding.cc hnsw.cpp hnsw.h)
+add_executable(performance_test_large ${PROJECT_SOURCE_DIR}/test/performance_test_large.cc ${COMMON_SOURCES})
 target_link_libraries(performance_test_large PRIVATE llama common)
 
-add_executable(HNSW_Delete_Test HNSW_Delete_Test.cpp kvstore_api.h kvstore.h kvstore.cc
-        skiplist.cpp skiplist.h sstable.cpp sstable.h
-        bloom.cpp bloom.h MurmurHash3.h utils.h test.h shared_data.h shared_data.cpp
-        sstablehead.cpp sstablehead.h embedding/embedding.h embedding/embedding.cc hnsw.cpp hnsw.h)
-target_link_libraries(HNSW_Delete_Test PRIVATE llama common)
+# HNSW test executables
+add_executable(hnsw_delete_test ${PROJECT_SOURCE_DIR}/test/HNSW_Delete_Test.cpp ${COMMON_SOURCES})
+target_link_libraries(hnsw_delete_test PRIVATE llama common)
 
-add_executable(HNSW_Persistent_Test_Phase1 HNSW_Persistent_Test_Phase1.cpp kvstore_api.h kvstore.h kvstore.cc
-        skiplist.cpp skiplist.h sstable.cpp sstable.h
-        bloom.cpp bloom.h MurmurHash3.h utils.h test.h shared_data.h shared_data.cpp
-        sstablehead.cpp sstablehead.h embedding/embedding.h embedding/embedding.cc hnsw.cpp hnsw.h)
-target_link_libraries(HNSW_Persistent_Test_Phase1 PRIVATE llama common)
+add_executable(hnsw_persistent_test_p1 ${PROJECT_SOURCE_DIR}/test/HNSW_Persistent_Test_Phase1.cpp ${COMMON_SOURCES})
+target_link_libraries(hnsw_persistent_test_p1 PRIVATE llama common)
 
-add_executable(HNSW_Persistent_Test_Phase2 HNSW_Persistent_Test_Phase2.cpp kvstore_api.h kvstore.h kvstore.cc
-        skiplist.cpp skiplist.h sstable.cpp sstable.h
-        bloom.cpp bloom.h MurmurHash3.h utils.h test.h shared_data.h shared_data.cpp
-        sstablehead.cpp sstablehead.h embedding/embedding.h embedding/embedding.cc hnsw.cpp hnsw.h)
-target_link_libraries(HNSW_Persistent_Test_Phase2 PRIVATE llama common)
+add_executable(hnsw_persistent_test_p2 ${PROJECT_SOURCE_DIR}/test/HNSW_Persistent_Test_Phase2.cpp ${COMMON_SOURCES})
+target_link_libraries(hnsw_persistent_test_p2 PRIVATE llama common)
 
+# Vector persistence test executables
+add_executable(vector_persistent_test_p1 ${PROJECT_SOURCE_DIR}/test/Vector_Persistent_Test_Phase1.cpp ${COMMON_SOURCES})
+target_link_libraries(vector_persistent_test_p1 PRIVATE llama common)
 
-add_executable(Vector_Persistent_Test_Phase1 Vector_Persistent_Test_Phase1.cpp kvstore_api.h kvstore.h kvstore.cc
-        skiplist.cpp skiplist.h sstable.cpp sstable.h
-        bloom.cpp bloom.h MurmurHash3.h utils.h test.h shared_data.h shared_data.cpp
-        sstablehead.cpp sstablehead.h embedding/embedding.h embedding/embedding.cc hnsw.cpp hnsw.h)
-target_link_libraries(Vector_Persistent_Test_Phase1 PRIVATE llama common)
+add_executable(vector_persistent_test_p2 ${PROJECT_SOURCE_DIR}/test/Vector_Persistent_Test_Phase2.cpp ${COMMON_SOURCES})
+target_link_libraries(vector_persistent_test_p2 PRIVATE llama common)
 
+# Search KNN test executables
+add_executable(search_knn_test_p1 ${PROJECT_SOURCE_DIR}/test/Search_knn_test_phase1.cpp ${COMMON_SOURCES})
+target_link_libraries(search_knn_test_p1 PRIVATE llama common)
 
-add_executable(Vector_Persistent_Test_Phase2 Vector_Persistent_Test_Phase2.cpp kvstore_api.h kvstore.h kvstore.cc
-        skiplist.cpp skiplist.h sstable.cpp sstable.h
-        bloom.cpp bloom.h MurmurHash3.h utils.h test.h shared_data.h shared_data.cpp
-        sstablehead.cpp sstablehead.h embedding/embedding.h embedding/embedding.cc hnsw.cpp hnsw.h)
-target_link_libraries(Vector_Persistent_Test_Phase2 PRIVATE llama common)
+add_executable(search_knn_test_p2 ${PROJECT_SOURCE_DIR}/test/Search_knn_test_phase2.cpp ${COMMON_SOURCES})
+target_link_libraries(search_knn_test_p2 PRIVATE llama common)
 
+# HNSW stronger test executables
+add_executable(hnsw_persistent_stronger_test_p1 ${PROJECT_SOURCE_DIR}/test/HNSW_Persistent_Stronger_Test_Phase1.cpp ${COMMON_SOURCES})
+target_link_libraries(hnsw_persistent_stronger_test_p1 PRIVATE llama common)
 
-add_executable(Search_knn_test_phase1 Search_knn_test_phase1.cpp kvstore_api.h kvstore.h kvstore.cc
-        skiplist.cpp skiplist.h sstable.cpp sstable.h
-        bloom.cpp bloom.h MurmurHash3.h utils.h test.h shared_data.h shared_data.cpp
-        sstablehead.cpp sstablehead.h embedding/embedding.h embedding/embedding.cc hnsw.cpp hnsw.h)
-target_link_libraries(Search_knn_test_phase1 PRIVATE llama common)
+add_executable(hnsw_persistent_stronger_test_p2 ${PROJECT_SOURCE_DIR}/test/HNSW_Persistent_Stronger_Test_Phase2.cpp ${COMMON_SOURCES})
+target_link_libraries(hnsw_persistent_stronger_test_p2 PRIVATE llama common)
 
-
-add_executable(Search_knn_test_phase2 Search_knn_test_phase2.cpp kvstore_api.h kvstore.h kvstore.cc
-        skiplist.cpp skiplist.h sstable.cpp sstable.h
-        bloom.cpp bloom.h MurmurHash3.h utils.h test.h shared_data.h  shared_data.cpp
-        sstablehead.cpp sstablehead.h embedding/embedding.h embedding/embedding.cc hnsw.cpp hnsw.h)
-target_link_libraries(Search_knn_test_phase2 PRIVATE llama common)
-
-
-
-
-
-
-
-
-add_executable(HNSW_Persistent_Stronger_Test_Phase1  HNSW_Persistent_Stronger_Test_Phase1.cpp kvstore_api.h kvstore.h kvstore.cc
-        skiplist.cpp skiplist.h sstable.cpp sstable.h
-        bloom.cpp bloom.h MurmurHash3.h utils.h test.h shared_data.h shared_data.cpp
-        sstablehead.cpp sstablehead.h embedding/embedding.h embedding/embedding.cc hnsw.cpp hnsw.h)
-target_link_libraries(HNSW_Persistent_Stronger_Test_Phase1 PRIVATE llama common)
-
-add_executable( HNSW_Persistent_Stronger_Test_Phase2  HNSW_Persistent_Stronger_Test_Phase2.cpp kvstore_api.h kvstore.h kvstore.cc
-        skiplist.cpp skiplist.h sstable.cpp sstable.h
-        bloom.cpp bloom.h MurmurHash3.h utils.h test.h shared_data.h shared_data.cpp
-        sstablehead.cpp sstablehead.h embedding/embedding.h embedding/embedding.cc hnsw.cpp hnsw.h)
-target_link_libraries(HNSW_Persistent_Stronger_Test_Phase2 PRIVATE llama common
-)
-
-add_executable(mapreduce-parallel 
-        mapreduce-parallel.cpp)
+# Parallel processing examples
+add_executable(mapreduce-parallel ${PROJECT_SOURCE_DIR}/mapreduce-parallel.cpp ${COMMON_SOURCES})
 target_link_libraries(mapreduce-parallel PRIVATE llama common)
 
-add_executable(readfile-parallel
-        readfile-parallel.cc)
+add_executable(readfile-parallel ${PROJECT_SOURCE_DIR}/readfile-parallel.cc ${COMMON_SOURCES})
 target_link_libraries(readfile-parallel PRIVATE llama common)
 
-add_executable(threadpool
-        threadpool.cc)
+add_executable(threadpool ${PROJECT_SOURCE_DIR}/threadpool.cc ${COMMON_SOURCES})
 target_link_libraries(threadpool PRIVATE llama common)
 
 add_subdirectory(third_party/llama.cpp)
-
 add_subdirectory(embedding)
 
-# add_subdirectory(test)
