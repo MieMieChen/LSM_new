@@ -43,31 +43,16 @@ float HNSW::vector_norm(std::vector<float> a) {
 void HNSW::insert(uint64_t key, const std::vector<float>& vector) {
     // 分配新的节点ID
     int layer = rand_level();
-    // 检查key是否已经存在
-    // if (nodes.find(key) != nodes.end()) {
-    //     nodes[key].is_deleted = false; // 标记为未删除
-    //     nodes[key].vector = vector; // 更新向量
-    //     nodes[key].max_level = std::max(nodes[key].max_level, layer); // 更新最大层级
-    // }
-    // // 创建新节点
-    // else
-    // { 
-        Node node(key, 0, vector, layer);
-        nodes.push_back(node);
-        uint64_t node_id = nodes.size() - 1;
-        nodes[node_id].id = node_id; // 设置节点ID
-        // nodes[node_id].layer_connections.resize(layer + 1);
-        // nodes[node_id].is_deleted = false; // 标记为未删除
-
-    // }
-    
+    Node node(key, 0, vector, layer);
+    nodes.push_back(node);
+    uint64_t node_id = nodes.size() - 1;
+    nodes[node_id].id = node_id; // 设置节点ID
     // 确保layers至少有一层
     if(layers.empty()) {
         layers.resize(1);
     }
     
     int entry_points = get_entry_point();
-
     if(entry_points == -1) {
         entry_point = node_id;
         layer = 0;
@@ -92,7 +77,7 @@ void HNSW::insert(uint64_t key, const std::vector<float>& vector) {
     
     // 第一步：自顶层向下逐层搜索，找到每层与q最接近的节点作为下一层的入口点
     uint64_t curr_entry_point = entry_point;
-    for(int i = globalHeader.max_level; i > layer; i--) {
+    for(int i = globalHeader.max_level; i > layer; i--) {                                                                 
         float best_dist = -1.0f;
         uint64_t best_node = curr_entry_point;
         std::list<uint64_t> visited;
@@ -122,7 +107,7 @@ void HNSW::insert(uint64_t key, const std::vector<float>& vector) {
         curr_entry_point = best_node;
     }
     
-    // 第二步：从layer层到第0层搜索，在每层将q与最近的efConstruction个点相连
+    // 第二步：从layer层到第0层搜索，在每层将q与最近的  M个点相连
     for(int i = layer; i >= 0; i--) {
         if(layers[i].find(node_id) == layers[i].end()) {
             layers[i][node_id] = {};
@@ -135,7 +120,7 @@ void HNSW::insert(uint64_t key, const std::vector<float>& vector) {
         visited.push_back(curr_entry_point);
         
         // 计算与入口点的相似度
-        float sim = cosine_similarity(vector, nodes[curr_entry_point].vector);
+        float sim = cosine_similarity(vector, nodes[curr_entry_point].vector); //这里都是用id索引的
         neighbors.push_back({sim, curr_entry_point});
         
         // 贪心搜索过程
@@ -159,16 +144,19 @@ void HNSW::insert(uint64_t key, const std::vector<float>& vector) {
         std::sort(neighbors.begin(), neighbors.end(), [](const auto& a, const auto& b) {
             return a.first > b.first; // 相似度降序
         });
+        //计算了该层所有的点和自己的相似度
         
         int num_edges = std::min(globalHeader.M, static_cast<uint32_t>(neighbors.size())); //找到离自己近的M个节点
         for(int j = 0; j < num_edges; j++) {
             uint64_t neighbor_id = neighbors[j].second;
-            layers[i][node_id].push_back(neighbor_id);
+            layers[i][node_id].push_back(neighbor_id); //建立联系
             layers[i][neighbor_id].push_back(node_id);
 
             nodes[node_id].layer_connections[i].push_back(neighbor_id);
             nodes[neighbor_id].layer_connections[i].push_back(node_id);
             
+
+            //删去多余的边
             if(layers[i][neighbor_id].size() > globalHeader.M_max) {
                 std::vector<std::pair<float, uint64_t>> neighbor_edges;
                 for(uint64_t edge : layers[i][neighbor_id]) {
@@ -249,7 +237,7 @@ std::vector<std::pair<std::uint64_t, std::string>> HNSW::query(const std::vector
                     float dist = cosine_similarity(query_vector, nodes[neighbor].vector);
                     visited.push_back(neighbor);
                     candidates.push_back(node(neighbor,dist));
-                    if(candidates.size() > globalHeader.efConstruction) {
+                    if(candidates.size() > globalHeader.efConstruction) { //剪枝
                         // 对list排序，按照dist降序（相似度越高越好）
                         candidates.sort([](const node& a, const node& b) {
                             return a.dist > b.dist; // 按相似度降序排列
@@ -314,15 +302,6 @@ std::vector<std::pair<std::uint64_t, std::string>> HNSW::query(const std::vector
                 if(top_candidates.size() > globalHeader.efConstruction) { 
                     std::sort(top_candidates.begin(), top_candidates.end(),
                         [](const auto& a, const auto& b) { return a.first > b.first; }); 
-
-                        // 为了保证之后能有k个 剪枝的时候要把已经delete的数量计算出来 最后再删除
-                        // uint64_t deleted_count = 0;
-                        // for(auto it = top_candidates.begin(); it != top_candidates.end(); ++it) {
-                        //     if(nodes[it->second].is_deleted) {
-                        //        deleted_count++;
-                        //     }
-                        // }
-                        // top_candidates.resize(std::min(globalHeader.efConstruction+deleted_count,top_candidates.size()));
                         top_candidates.resize(std::min(globalHeader.efConstruction,(uint32_t)top_candidates.size()));
                     }
             }

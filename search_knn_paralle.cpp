@@ -131,10 +131,10 @@ std::vector<std::pair<std::uint64_t, std::string>> KVStore::query_knn_parallel(
     }
 
     
-    //const size_t num_threads = std::thread::hardware_concurrency();
-    const size_t num_threads = 1; // 或者根据需要设置线程数
+    const size_t num_threads = std::thread::hardware_concurrency();
+    // const size_t num_threads = 1; // 或者根据需要设置线程数
 
-    std::vector<typename std::map<std::uint64_t, std::vector<float>>::const_iterator> chunk_starts;
+    std::vector<typename std::map<std::uint64_t, std::vector<float>>::const_iterator> chunk_starts; //第几份和对应的Cache的开始
     chunk_starts.push_back(Cache.begin());
     size_t cache_size = Cache.size();
     size_t elements_per_thread = cache_size / num_threads;
@@ -146,15 +146,18 @@ std::vector<std::pair<std::uint64_t, std::string>> KVStore::query_knn_parallel(
              ++current_it;
              ++elements_advanced;
         }
-        chunk_starts.push_back(current_it);
+        chunk_starts.push_back(current_it); //跳过一个块的大小，然后把当前迭代器加入到块开始列表中
     }
     chunk_starts.push_back(Cache.end()); // 最后一个块的结束迭代器
 
-    std::vector<std::future<std::vector<SimKey>>> map_futures;
+    std::vector<std::future<std::vector<SimKey>>> map_futures; // 存储每个线程的 Future 对象，这个对象是异步执行的结果
     int k_per_chunk = k;
     for (size_t i = 0; i < num_threads; ++i) {
+        //std::future 的主要作用：
+// 分离异步操作的启动与结果获取： 你的主线程可以启动一个耗时的任务，然后立即继续执行其他操作，而不需要等待该任务完成。当主线程需要任务结果时，它可以通过 std::future 来获取。
+// 线程间通信： std::future 和 std::promise 提供了一种简单的方式，让一个线程将计算结果传递给另一个线程。
         map_futures.push_back(
-            std::async(std::launch::async,
+            std::async(std::launch::async, //这是一个黑箱！
                        &KVStore::find_top_k_in_chunk, // 成员函数指针
                        this, // 调用成员函数需要传递对象指针
                        chunk_starts[i],    // 块开始迭代器
@@ -164,17 +167,17 @@ std::vector<std::pair<std::uint64_t, std::string>> KVStore::query_knn_parallel(
         );
     }
 
-    auto cmp_global = [](const SimKey& a, const SimKey& b) { return a.first < b.first; };
+    auto cmp_global = [](const SimKey& a, const SimKey& b) { return a.first < b.first; }; // 全局比较器，用于维护全局 Top-K 的小顶堆
     std::priority_queue<SimKey, std::vector<SimKey>, decltype(cmp_global)> top_k_global(cmp_global);
 
     for (auto& fut : map_futures) {
         try {
-            std::vector<SimKey> chunk_results = fut.get(); // 等待并获取块内 Top-K
+            std::vector<SimKey> chunk_results = fut.get(); // 等待并获取块内 Top-K，因为线程调用的函数std::future的返回值就是simkey的vector
             for (const auto& sim_key : chunk_results) {
                 if (top_k_global.size() < k || sim_key.first > top_k_global.top().first) {
-                     top_k_global.push(sim_key);
+                     top_k_global.push(sim_key); //因为没有必要加入更小的
                      if (top_k_global.size() > k) {
-                        top_k_global.pop(); // 移除全局当前最小相似度的项
+                        top_k_global.pop(); // 移除全局当前最小相似度的项，因为维护的是小顶堆
                      }
                 }
             }
@@ -198,6 +201,10 @@ std::vector<std::pair<std::uint64_t, std::string>> KVStore::query_knn_parallel(
     get_futures.reserve(final_sim_keys.size());
     keys.reserve(final_sim_keys.size());
 
+    // 5. 异步获取每个 key 对应的字符串值
+    // 这里使用 std::async 来并行获取每个 key 的值
+    // 这样可以充分利用多核 CPU 的并行处理能力
+    // 这一步是为了避免在主线程中阻塞等待每个 get 操作完成
     for(const auto& sim_key : final_sim_keys){
         std::uint64_t key = sim_key.second;
         keys.push_back(key);

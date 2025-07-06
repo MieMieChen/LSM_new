@@ -95,9 +95,10 @@ KVStore::~KVStore()
     ss.putFile(ss.getFilename().data());
     //cache落入磁盘
     save_embedding_to_disk("./data/");
-    // save_hnsw_index_to_disk("./hnsw_data_root/");
     sstableIndex[0].push_back(ss.getHead());
     compaction(); 
+    // save_hnsw_index_to_disk("./hnsw_data_root/");
+
 }
 
 /**
@@ -403,10 +404,6 @@ std::vector<KVT>  KVStore::mergeSort(std::vector<KVT> left, std::vector<KVT> rig
     int leftIndex = 0, rightIndex = 0;
 
     while (leftIndex < left.size() && rightIndex < right.size()) {
-        if(left[leftIndex].key==4061||right[rightIndex].key==4061)
-        {
-            int a = 1;
-        }
         if (left[leftIndex].key < right[rightIndex].key) {
             result.push_back(left[leftIndex]);
             leftIndex++;
@@ -426,7 +423,7 @@ std::vector<KVT>  KVStore::mergeSort(std::vector<KVT> left, std::vector<KVT> rig
             }
             else
             {
-                if(left[leftIndex].time > right[rightIndex].time)
+                if(left[leftIndex].time > right[rightIndex].time) //说明更新
                     result.push_back(left[leftIndex]);
                 else    
                     result.push_back(right[rightIndex]);
@@ -436,6 +433,7 @@ std::vector<KVT>  KVStore::mergeSort(std::vector<KVT> left, std::vector<KVT> rig
         }
     }
 
+    //把剩余的都塞进去
     while (leftIndex < left.size()) {
         result.push_back(left[leftIndex]);
         leftIndex++;
@@ -449,6 +447,67 @@ std::vector<KVT>  KVStore::mergeSort(std::vector<KVT> left, std::vector<KVT> rig
     return result;
 
 }
+
+// std::vector<KVT> KVStore::parallelMergeSort(std::vector<KVT> left, std::vector<KVT> right) {
+//     const size_t total_size = left.size() + right.size();
+//     std::vector<KVT> result(total_size);
+    
+//     // 如果数据量太小，直接串行归并
+//     if (total_size < 1000) {
+//         return mergeSort(left, right);
+//     }
+    
+//     const int num_threads = std::thread::hardware_concurrency();
+//     std::vector<std::future<void>> futures;
+    
+//     // 按照left数组分块
+//     size_t left_block_size = left.size() / num_threads;
+    
+//     for (int i = 0; i < num_threads; i++) {
+//         size_t left_start = i * left_block_size;
+//         size_t left_end = (i == num_threads - 1) ? left.size() : (i + 1) * left_block_size;
+        
+//         // 找到right中对应的范围
+//         uint64_t start_key = left[left_start].key;
+//         uint64_t end_key = (left_end < left.size()) ? left[left_end].key : UINT64_MAX;
+        
+//         futures.push_back(std::async(std::launch::async, [&, left_start, left_end, start_key, end_key]() {
+//             // 在right中找到对应范围
+//             auto right_start = std::lower_bound(right.begin(), right.end(), start_key,
+//                 [](const KVT& a, uint64_t key) { return a.key < key; });
+//             auto right_end = std::upper_bound(right.begin(), right.end(), end_key,
+//                 [](uint64_t key, const KVT& a) { return key < a.key; });
+            
+//             // 归并这部分数据
+//             size_t pos = left_start;
+//             auto lit = left.begin() + left_start;
+//             auto rit = right_start;
+            
+//             while (lit < left.begin() + left_end && rit < right_end) {
+//                 if (lit->key <= rit->key) {
+//                     result[pos++] = *lit++;
+//                 } else {
+//                     result[pos++] = *rit++;
+//                 }
+//             }
+            
+//             while (lit < left.begin() + left_end) {
+//                 result[pos++] = *lit++;
+//             }
+            
+//             while (rit < right_end) {
+//                 result[pos++] = *rit++;
+//             }
+//         }));
+//     }
+    
+//     // 等待所有任务完成
+//     for (auto& future : futures) {
+//         future.wait();
+//     }
+    
+//     return result;
+// }
 
 void KVStore::compaction() {
     int curLevel = 0;
@@ -465,8 +524,6 @@ void KVStore::compaction() {
     
     for(; curLevel <= totalLevel; curLevel++) {
         updateLevel = false;
-        // sizeCur = sstableIndex[curLevel].size();
-        // sizeNxt = (curLevel + 1 <= totalLevel) ? sstableIndex[curLevel+1].size() : 0;
         int num = 0;
         std::vector<std::string> filesCur,filesNxt;
         sizeCur = utils::scanDir("./data/level-" + std::to_string(curLevel),filesCur);
@@ -478,8 +535,7 @@ void KVStore::compaction() {
                 totalLevel++;
             }            
             waitlist.clear();
-            // processedKeys.clear();
-            // keyMaxTime.clear();
+
             minVtmp = UINT64_MAX;
             maxVtmp = 0;
             if(curLevel == 0) {
@@ -506,7 +562,7 @@ void KVStore::compaction() {
                     }
                     return a.tablehead.getMinV() < b.tablehead.getMinV();
                 });
-                
+            //把time比较小（老东西），或者数值比较小的合并到后面去
                 int tablesToSelect = sizeCur - pow(2, curLevel+1);
                 for(j = 0; j < tablesToSelect && j < candidates.size(); j++)
 {
@@ -542,15 +598,10 @@ void KVStore::compaction() {
                     kvs.push_back(KVT(sstableheads[i].getKey(j), sstables[i].getData(j),sstableheads[i].getTime(),waitlist[i].level));
                 }
                 mergedKVs = mergeSort(mergedKVs,kvs);
-                // for(int i = 0; i < waitlist[i].getCnt(); i++) {
-                //     uint64_t key = waitlist[i].getKey(i);
-                //     if(keyMaxTime.find(key) == keyMaxTime.end() || keyMaxTime[key] < waitlist[i].getTime())
-                //         keyMaxTime[key] = waitlist[i].getTime();
-                // }
             }
              //mergedKVs 现在是一个完全全新的要被加入到sstable的数据，然后顺序就是越早出队的越优先
             
-             newPath = "./data/level-" + std::to_string(curLevel + 1) + "/";
+             newPath = "./data/level-" + std::to_string(curLevel + 1) + "/"; //往
              if (!utils::dirExists(newPath)) {
                  utils::mkdir(newPath.data());
              }
@@ -739,7 +790,7 @@ std::vector<std::pair<std::uint64_t, std::string>> KVStore::search_knn_hnsw(std:
     return result;
 
 }
-//注意 这个传入的参数是什么！！
+//注意 这个传入的参数是什么！！   
 void KVStore::load_embedding_from_disk(const std::string &data_root)
 {
     Cache.clear();
@@ -973,7 +1024,7 @@ void KVStore::save_embedding_to_disk(const std::string &data_root)
     }
     std::string file_path = data_root + "/embedding.bin";
     bool is_initialized = fs::exists(file_path) && fs::file_size(file_path) > 0;
-    if (is_initialized) {
+    if (is_initialized) {  //这就只用追加修改了，否则就是先把cache当中的都写进去
         std::cout << "Embedding file already exists. appending..." << std::endl;
         FILE* file = fopen((file_path).c_str(), "ab");
         if(file==NULL)
@@ -981,14 +1032,14 @@ void KVStore::save_embedding_to_disk(const std::string &data_root)
             printf("cannot open a file 8\n");
             return;
         }
-        for(auto it:dirty_keys)
+        for(auto it:dirty_keys) //被修改过的数据
         {
             fwrite(&it,sizeof(std::uint64_t),1,file);
-            if(Cache.count(it))
+            if(Cache.count(it)) //如果现在还在cache当中，说明是被修改
             {
                 fwrite(Cache[it].data(),sizeof(float),dim,file);
             }
-            else
+            else //说明是被删了，写入deleted的标志
             {
                 std::vector<float> deleted(dim, std::numeric_limits<float>::max());
                 fwrite(deleted.data(), sizeof(float), dim, file);

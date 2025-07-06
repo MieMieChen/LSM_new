@@ -47,7 +47,7 @@ class HNSW {
         uint64_t get_max_layer() const;
         uint64_t get_entry_point() const;
         std::vector<std::pair<std::uint64_t, std::string>> query(const std::vector<float>& query_vector, int k);
-        std::vector<std::unordered_map<uint64_t, std::vector<uint64_t>>> layers;   
+        std::vector<std::unordered_map<uint64_t, std::vector<uint64_t>>> layers; //层数，id和于该id相连的   
         struct HNSWGlobalHeader {
             uint32_t M;                // 参数
             uint32_t M_max;            // 参数
@@ -57,8 +57,7 @@ class HNSW {
             uint32_t num_nodes;        // 节点总数
             uint32_t dim;              // 向量维度
         } globalHeader;       
-        // std::unordered_map<uint64_t, uint64_t> key_to_id;  // 键值到节点ID的映射
-        // std::unordered_map<uint64_t, uint64_t> id_to_key;  // 节点ID到键值的映射
+
         std::vector<Node> nodes;
         void set_entry_point(uint64_t id);
     private:
