@@ -1,73 +1,90 @@
-# LSM-Tree with HNSW-Enhanced Semantic Search
+-----
 
-# 这是上海交通大学软件工程——高级数据结构课程项目
-总评100分
-## Project Overview
-This project implements a high-performance key-value storage system based on Log-Structured Merge Tree (LSM Tree), enhanced with semantic search capabilities through HNSW (Hierarchical Navigable Small World) algorithm. The system is designed to handle large-scale data storage and retrieval efficiently, particularly in high-concurrency scenarios.
+# 融合 HNSW 语义搜索的 LSM-Tree 存储系统
 
-For detailed performance analysis and test results, please refer to the report.pdf in each iteration's documentation.
+-----
 
-## Project Evolution
+## 项目概览
 
-### Iteration 1: Core LSM-Tree Implementation
-- Efficient key-value storage with Log-Structured Merge Tree architecture
-- Memory-first write operations with batch disk writes
-- Multi-level storage structure
-- Core operations:
-  - PUT (insert/update key-value pairs)
-  - GET (retrieve key-value pairs)
-  - DEL (delete key-value pairs)
-- Optimizations:
-  - Bloom Filter for quick existence checks
-  - SSTable (Sorted Strings Table) for efficient storage
-  - Logical key-value separation in SSTable structure
+本项目为上海交通大学软件工程——高级数据结构课程项目，旨在实现一个基于 **LSM 树 (Log-Structured Merge Tree)** 的高性能键值存储系统，并增强其语义搜索能力，通过集成 **HNSW (Hierarchical Navigable Small World) 算法** 实现。该系统设计目标是高效处理大规模数据存储和检索，尤其适用于高并发场景。
 
-### Iteration 2: Semantic Search Integration
-- Enhanced LSM-tree with semantic search capabilities
-- Integration of Embedding Models for semantic understanding
-- Added support for similarity-based queries
-- Use cases:
-  - Semantic product search in e-commerce
-  - Content-based recommendations
-  - Similar item discovery
+**总评：100分**
 
-### Iteration 3: HNSW Algorithm Implementation
-- Integrated HNSW (Hierarchical Navigable Small World) algorithm
-- Configurable parameters:
-  - M (default: 6) - Maximum number of connections per layer
-  - M_max (default: 8) - Maximum number of connections during construction
-  - efConstruction (default: 30) - Size of dynamic candidate list
-  - m_L (default: 6) - Number of layers in the graph
+有关详细的性能分析和测试结果，请查阅每次迭代文档中的 `report.pdf` 文件。
 
-### Iteration 4: Persistence and Index Management
-- Vector embedding persistence:
-  - Efficient storage of embedding vectors to disk
-  - Fast retrieval of stored embeddings
-- HNSW index structure management:
-  - Support for index deletion and modification
-  - Index persistence to disk
-  - Index reusability across system restarts
+-----
 
-### Iteration 5: Parallel Processing Optimization
-- Enhanced K-Nearest Neighbors (KNN) search with parallel processing
-- Multi-threaded implementation for:
-  - Vector similarity calculations
-  - Top-K results retrieval
-  - Metadata fetching
-- Performance improvements:
-  - Reduced latency for large-scale vector searches
-  - Improved system throughput
-  - Efficient utilization of multi-core CPU resources
+## 项目演进
 
-## Technical Details
+### 迭代 1：核心 LSM 树实现
 
-### Storage Structure
-Current SSTable Structure:
+  * **高效键值存储：** 采用 LSM 树架构。
+  * **内存优先写入：** 支持批量磁盘写入。
+  * **多级存储结构。**
+  * **核心操作：**
+      * **PUT：** 插入/更新键值对。
+      * **GET：** 检索键值对。
+      * **DEL：** 删除键值对。
+  * **优化：**
+      * **布隆过滤器 (Bloom Filter)：** 用于快速检查键是否存在。
+      * **SSTable (Sorted Strings Table)：** 实现高效存储。
+      * **逻辑键值分离：** 在 SSTable 结构中实现键和值的逻辑分离。
+
+### 迭代 2：语义搜索集成
+
+  * **LSM 树增强：** 增加语义搜索能力。
+  * **嵌入模型集成：** 用于语义理解，**可以调取 API 接口实现调用**。
+  * **支持相似度查询。**
+  * **应用场景：**
+      * 电子商务中的语义商品搜索。
+      * 基于内容的推荐系统。
+      * 相似商品发现。
+
+### 迭代 3：HNSW 算法实现
+
+  * **集成 HNSW (Hierarchical Navigable Small World) 算法。**
+  * **可配置参数：**
+      * **M (默认值: 6)：** 每层最大连接数。
+      * **M\_max (默认值: 8)：** 构建时最大连接数。
+      * **efConstruction (默认值: 30)：** 动态候选列表大小。
+      * **m\_L (默认值: 6)：** 图的层数。
+
+### 迭代 4：持久化与索引管理
+
+  * **向量嵌入持久化：**
+      * 将嵌入向量高效存储到磁盘。
+      * 快速检索已存储的嵌入。
+  * **HNSW 索引结构管理：**
+      * 支持索引删除和修改。
+      * 索引持久化到磁盘。
+      * 系统重启后索引可重用。
+
+### 迭代 5：并行处理优化
+
+  * **增强 K 近邻 (KNN) 搜索：** 实现并行处理。
+  * **多线程实现：** 用于以下操作：
+      * 向量相似度计算。
+      * Top-K 结果检索。
+      * 元数据获取。
+  * **性能提升：**
+      * 显著降低大规模向量搜索的延迟。
+      * 提高系统吞吐量。
+      * 高效利用多核 CPU 资源。
+
+-----
+
+## 技术细节
+
+### 存储结构
+
+**当前 SSTable 结构：**
+
 ```
 [Header(32B)] [Bloom Filter(10KB)] [Index(key+offset)] [Data(values)]
 ```
 
-Future Enhancement Path:
+**未来增强方向：**
+
 ```
 Index File (.index):
 [Header] [Bloom Filter] [Index(key+data_file_pointer)]
@@ -76,10 +93,15 @@ Data File (.data):
 [Values]
 ```
 
-### Performance Optimizations
-- Memory-first write operations
-- Batch disk writes
-- Bloom Filter for quick key existence checks
-- Multi-threaded parallel processing
-- Efficient index persistence and reuse
-- Optimized vector similarity calculations
+### 性能优化
+
+  * 内存优先写入操作。
+  * 批量磁盘写入。
+  * 布隆过滤器用于快速检查键是否存在。
+  * 多线程并行处理。
+  * 高效的索引持久化和重用。
+  * 优化向量相似度计算。
+
+-----
+
+**第三方库可以从 `.gitmodules` 文件中获取。**
