@@ -1,5 +1,7 @@
 # LSM-Tree with HNSW-Enhanced Semantic Search
 
+# 这是上海交通大学软件工程——高级数据结构课程项目
+总评100分
 ## Project Overview
 This project implements a high-performance key-value storage system based on Log-Structured Merge Tree (LSM Tree), enhanced with semantic search capabilities through HNSW (Hierarchical Navigable Small World) algorithm. The system is designed to handle large-scale data storage and retrieval efficiently, particularly in high-concurrency scenarios.
 
